@@ -26,7 +26,7 @@ RUN apt-get install -y build-essential \
                        libreadline-dev
 
 # Python3をインストール
-RUN wget https://www.python.org/ftp/python/3.5.2/Python-3.5.2.tgz
+RUN wget https://www.python.org/ftp/python/3.6.5/Python-3.6.5.tgz
 RUN tar xvf Python-3.5.2.tgz 
 WORKDIR Python-3.5.2
 RUN ./configure && make && make install
@@ -63,7 +63,7 @@ RUN chown bottle:bottle server.py
 
 # ポートは8080(bottleは8080らしい)にし、サーバ起動ファイルを新しく作成した"bottle"ユーザで起動
 EXPOSE 8080
-# ENTRYPOINT ["/usr/local/bin/python3", "/home/bottle/server.py"]
+ENTRYPOINT ["/usr/local/bin/python3", "/home/bottle/server.py"]
 USER bottle
 
 # vim の設定ファイル
