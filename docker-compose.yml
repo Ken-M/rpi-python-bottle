@@ -27,15 +27,24 @@ services:
 	    - data
 
 	application:
-	  container_name: rpi-python-bottle-app
+	  container_name: rpi-python-bottle-app-server
 	  build: .
 	  tty: false
 	  volumes_from:
 	    - data
 	  volumes:
-	   - ./app:/home/bottle/app
+	   - ./app_server:/home/bottle/app
 	  ports:
 	    - "8080:8080"
+	  environment:
+	    CODEIGNITER_ENV: development
+	    
+	application:
+	  container_name: rpi-python-bottle-app-measure
+	  build: .
+	  tty: false
+	  volumes:
+	   - ./app_measure:/home/bottle/app
 	  environment:
 	    CODEIGNITER_ENV: development
 

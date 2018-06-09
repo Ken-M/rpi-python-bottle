@@ -26,7 +26,7 @@ connector = mysql.connector.connect (
 @route('/instantaneous_list')
 def list():
     cursor = connector.cursor()
-    cursor.execute("select `id`, `power`, `careted_at` from instantaneous_value")
+    cursor.execute("select `id`, `power`, `created_at` from instantaneous_value")
 
     disp  = "<table>"
     # ヘッダー
@@ -45,15 +45,15 @@ def list():
 @route('/integrated_list')
 def list():
     cursor = connector.cursor()
-    cursor.execute("select `id`, `integrated_power`, `careted_at` from integrated_value")
+    cursor.execute("select `id`, `integrated_power`, `power_delta`, `created_at` from integrated_value")
 
     disp  = "<table>"
     # ヘッダー
-    disp += "<tr><th>ID</th><th>積算電力(kWh)</th><th>計測日</th></tr>"
+    disp += "<tr><th>ID</th><th>積算電力(kWh)</th><th>差分(kwH)</th><th>計測日</th></tr>"
     
     # 一覧部分
     for row in cursor.fetchall():
-        disp += "<tr><td>" + str(row[0]) + "</td><td>" + str(row[1]) + "</td><td>" + str(row[2]) + "</td></tr>"
+        disp += "<tr><td>" + str(row[0]) + "</td><td>" + str(row[1]) + "</td><td>" + str(row[2]) + "</td><td>" + str(row[3]) + "</td></tr>"
     
     disp += "</table>"
     
@@ -79,10 +79,30 @@ def input_instantaneous_power():
 def input_integrated_power():
     # 積算値を入力
     cursor = connector.cursor()
-    cursor.execute("INSERT INTO `integrated_value` (`server_id`, `integrated_power`, `power_delta`, `power_charge`, `created_at`, `created_user`, `updated_at`, `updated_user`) VALUES (" + request.query.server_id + ", " + request.query.integrated_power + ", 0, 0," + urllib.parse.unquote(request.query.date)+ "," + request.query.user_id + ", NOW(), " + request.query.user_id + ") ")
+    
+    d = datetime.datetime.today()
+    date_str = urllib.parse.unquote(request.query.date)
+    d.strptime(date_str, "%Y/%m/%d %H:%M:%S")
+    
+    # 30分前
+    30min_before = d - datetime.timedelta(minutes=-30)
+    30min_before_str = 30min_before.strftime("%Y/%m/%d %H:%M:%S")
+    
+    # 30分前の積算値を取得
+    cursor.execute("select `id`, `integrated_power`, `created_at` from integrated_value where created_at = " + 30min_before_str)
+    
+    30min_power = 0
+    
+    for row in cursor.fetchone()
+    	# ToDo: オーバーフロー処理
+    	30min_power = request.query.integrated_power - row[1]
+    
+    cursor.execute("INSERT INTO `integrated_value` (`server_id`, `integrated_power`, `power_delta`, `power_charge`, `created_at`, `created_user`, `updated_at`, `updated_user`) VALUES (" + request.query.server_id + ", " + request.query.integrated_power + ", " + 30min_power + ", 0," + urllib.parse.unquote(request.query.date)+ "," + request.query.user_id + ", NOW(), " + request.query.user_id + ") on duplicate key update date=" + urllib.parse.unquote(request.query.date) + ", updated_at=NOW()")
 
     # コミット
     connector.commit();
+    
+    
 
     cursor.close
 
