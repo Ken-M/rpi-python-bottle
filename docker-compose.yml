@@ -1,21 +1,21 @@
 version: "3"
-services:
 
-    data:
-      container_name: rpi-python-bottle-data
-      image: hypriot/armhf-busybox
-      stdin_open: true
-      tty: false
-      volumes:
-        - ./docker/mysql:/etc/mysql/conf.d:ro
-        - ./app:/home/bottle
-      command: /bin/sh
+volumes:
+  mysql-db:
+    driver_opts:
+      type: none
+      device: /mnt/nas/workspace/data/mysql
+      o: bind
+      
+services:
 
     mysql:
       container_name: rpi-python-bottle-db
       image: hypriot/rpi-mysql
       volumes:
        - ./initdb.d:/docker-entrypoint-initdb.d
+       - mysql-db:/var/lib/mysql
+       - ./docker/mysql:/etc/mysql/conf.d:ro
       environment:
         MYSQL_ROOT_PASSWORD: password
         MYSQL_USER: bottle
@@ -23,15 +23,12 @@ services:
         MYSQL_DATABASE: measurement
       ports:
         - "3306:3306"
-      volumes_from:
-        - data
+
 
     application:
       container_name: rpi-python-bottle-app-server
       build: .
       tty: false
-      volumes_from:
-        - data
       volumes:
        - ./app_server:/home/bottle/app
       ports:
