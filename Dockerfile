@@ -29,8 +29,8 @@ RUN apt-get install -y build-essential \
 
 # Python3をインストール
 RUN wget https://www.python.org/ftp/python/3.6.5/Python-3.6.5.tgz
-RUN tar xvf Python-3.5.2.tgz 
-WORKDIR Python-3.5.2
+RUN tar xvf Python-3.6.5.tgz 
+WORKDIR Python-3.6.5
 RUN ./configure && make && make install
 
 # pip3をインストール
