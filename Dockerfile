@@ -4,6 +4,8 @@ FROM hypriot/rpi-python
 # 各ライブラリインストール
 # Pythonがパッケージ依存するものもインストール
 # Pythonプロフェッショナルプログラミング第2版P9より
+USER root
+
 RUN apt-get update
 RUN apt-get upgrade -y
 # よく使うコマンド
