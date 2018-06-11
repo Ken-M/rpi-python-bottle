@@ -48,7 +48,7 @@ RUN pip3 install virtualenv \
 				flake8
 
 # ユーザ作成
-RUN groupadd web
+#RUN groupadd web
 RUN useradd -d /home/bottle -m bottle
 
 # MySQLドライバ"mysql-connector-python"をインストール
