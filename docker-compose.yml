@@ -25,7 +25,7 @@ services:
         - "3306:3306"
 
 
-    application:
+    server-application:
       container_name: rpi-python-bottle-app-server
       build: .
       tty: false
@@ -40,7 +40,7 @@ services:
        - /home/bottle/app/server.py
        
         
-    application:
+    measure-application:
       container_name: rpi-python-bottle-app-measure
       build: .
       tty: false
