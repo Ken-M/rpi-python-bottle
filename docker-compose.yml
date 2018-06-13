@@ -35,6 +35,10 @@ services:
         - "8080:8080"
       environment:
         CODEIGNITER_ENV: development
+      entrypoint:
+       - /usr/local/bin/python3
+       - /home/bottle/app/server.py
+       
         
     application:
       container_name: rpi-python-bottle-app-measure

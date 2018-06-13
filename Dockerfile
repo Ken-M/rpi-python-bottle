@@ -58,14 +58,7 @@ WORKDIR mysql-connector-python
 RUN python3 ./setup.py build
 RUN python3 ./setup.py install
 
-# bottleを使ったサーバ起動ファイルをコピー
-ADD ./app/server.py /home/bottle/server.py
-WORKDIR /home/bottle
-RUN chown bottle:bottle server.py
 
-# ポートは8080(bottleは8080らしい)にし、サーバ起動ファイルを新しく作成した"bottle"ユーザで起動
-EXPOSE 8080
-ENTRYPOINT ["/usr/local/bin/python3", "/home/bottle/server.py"]
 USER bottle
 
 # vim の設定ファイル
