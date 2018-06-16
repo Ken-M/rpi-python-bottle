@@ -14,7 +14,7 @@ import logging
 import logging.handlers
 import datetime
 import locale
-import urllib.request
+import urllib
 
 coeff = 1
 unit = 0.1
