@@ -198,7 +198,7 @@ scanDuration = 4   # スキャン時間。サンプルでは6なんだけど、4
 scanRes = {} # スキャン結果の入れ物
 
 # スキャンのリトライループ（何か見つかるまで）
-while not scanRes.has_key("Channel") :
+while "Channel" not in scanRes :
     # アクティブスキャン（IE あり）を行う
     # 時間かかります。10秒ぐらい？
     ser.write(("SKSCAN 2 FFFFFFFF " + str(scanDuration) + "\r\n").encode())
@@ -225,7 +225,7 @@ while not scanRes.has_key("Channel") :
             scanRes[cols[0]] = cols[1]
     scanDuration+=1
 
-    if 14 < scanDuration and not scanRes.has_key("Channel"):
+    if 14 < scanDuration and "Channel" not in scanRes:
         # 引数としては14まで指定できるが、7で失敗したらそれ以上は無駄っぽい
         logger.error("スキャンリトライオーバー")
         ser.close()
