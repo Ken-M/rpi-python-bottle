@@ -42,10 +42,12 @@ RUN pip3 install --upgrade pip
 # bottle Pytrhonの軽量フレームワーク
 # flake8 コーディングスタイル/シンタックスのチェック
 # ipython Pythonのインタラクティブモード拡張
+RUN pip install --upgrade pip
 RUN pip3 install virtualenv \
 				bottle \
 				ipython \
-				flake8
+				flake8 \
+                pyserial
 
 # ユーザ作成
 RUN groupadd web
