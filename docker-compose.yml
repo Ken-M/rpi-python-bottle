@@ -48,4 +48,7 @@ services:
        - ./app_measure:/home/bottle/app
       environment:
         CODEIGNITER_ENV: development
+      entrypoint:
+       - /usr/local/bin/python3
+       - /home/bottle/app/get-power.py
 
