@@ -13,14 +13,14 @@ services:
       container_name: rpi-python-bottle-db
       image: hypriot/rpi-mysql
       volumes:
-       - ./initdb.d:/docker-entrypoint-initdb.d
+       - ./sql:/docker-entrypoint-initdb.d
        - mysql-db:/var/lib/mysql
        - ./docker/mysql:/etc/mysql/conf.d:ro
       environment:
         MYSQL_ROOT_PASSWORD: password
         MYSQL_USER: bottle
         MYSQL_PASSWORD: bottle
-        MYSQL_DATABASE: measurement
+        MYSQL_DATABASE: instantaneous_measurement
       ports:
         - "3306:3306"
 

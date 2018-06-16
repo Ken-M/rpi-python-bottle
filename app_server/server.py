@@ -4,6 +4,7 @@ from bottle import route, run, request
 # MySQLドライバはmysql.connector
 import mysql.connector
 import urllib.parse
+import datetime
 
 # 補足
 # 本当はテンプレートを入れるとHTMLが綺麗になります。
@@ -14,18 +15,25 @@ import urllib.parse
 # user     : MYSQL_USER
 # password : MYSQL_PASSWORD
 # database : MYSQL_DATABASE
-connector = mysql.connector.connect (
+instantaneous_connector = mysql.connector.connect (
             user     = 'bottle',
             password = 'bottle',
             host     = '172.17.0.3',
-            database = 'measurement'
+            database = 'instantaneous_measurement'
+)
+
+integrated_connector = mysql.connector.connect (
+            user     = 'bottle',
+            password = 'bottle',
+            host     = '172.17.0.3',
+            database = 'integrated_measurement'
 )
 
 
 			
 @route('/instantaneous_list')
-def list():
-    cursor = connector.cursor()
+def instantaneous_list():
+    cursor = instantaneous_connector.cursor()
     cursor.execute("select `id`, `power`, `created_at` from instantaneous_value")
 
     disp  = "<table>"
@@ -43,8 +51,8 @@ def list():
     return "DBから取得 "+disp
     
 @route('/integrated_list')
-def list():
-    cursor = connector.cursor()
+def integratd_list():
+    cursor = integrated_connector.cursor()
     cursor.execute("select `id`, `integrated_power`, `power_delta`, `created_at` from integrated_value")
 
     disp  = "<table>"
@@ -64,11 +72,11 @@ def list():
 @route('/input_instantaneous')
 def input_instantaneous_power():
     # 瞬時値を入力
-    cursor = connector.cursor()
+    cursor = instantaneous_connector.cursor()
     cursor.execute("INSERT INTO `instantaneous_value` (`server_id`, `power`, `created_at`, `created_user`, `updated_at`, `updated_user`) VALUES (" + request.query.server_id + ", " + request.query.power + ", NOW(), " + request.query.user_id + ", NOW(), " + request.query.user_id + ")")
 
     # コミット
-    connector.commit();
+    instantaneous_connector.commit()
 
     cursor.close
 
@@ -78,29 +86,29 @@ def input_instantaneous_power():
 @route('/input_integrated')
 def input_integrated_power():
     # 積算値を入力
-    cursor = connector.cursor()
+    cursor = integrated_connector.cursor()
     
     d = datetime.datetime.today()
     date_str = urllib.parse.unquote(request.query.date)
     d.strptime(date_str, "%Y/%m/%d %H:%M:%S")
     
     # 30分前
-    30min_before = d - datetime.timedelta(minutes=-30)
-    30min_before_str = 30min_before.strftime("%Y/%m/%d %H:%M:%S")
+    _30min_before = datetime.datetime.today
+    _30min_before = d - datetime.timedelta(minutes=-30)
+    _30min_before_str = _30min_before.strftime("%Y/%m/%d %H:%M:%S")
     
     # 30分前の積算値を取得
-    cursor.execute("select `id`, `integrated_power`, `created_at` from integrated_value where created_at = " + 30min_before_str)
+    cursor.execute("select `id`, `integrated_power`, `created_at` from integrated_value where created_at = " + _30min_before_str)
     
-    30min_power = 0
+    _30min_power = 0
     
-    for row in cursor.fetchone()
-    	# ToDo: オーバーフロー処理
-    	30min_power = request.query.integrated_power - row[1]
+   	# ToDo: オーバーフロー処理
+    _30min_power = request.query.integrated_power - cursor.fetchone()
     
-    cursor.execute("INSERT INTO `integrated_value` (`server_id`, `integrated_power`, `power_delta`, `power_charge`, `created_at`, `created_user`, `updated_at`, `updated_user`) VALUES (" + request.query.server_id + ", " + request.query.integrated_power + ", " + 30min_power + ", 0," + urllib.parse.unquote(request.query.date)+ "," + request.query.user_id + ", NOW(), " + request.query.user_id + ") on duplicate key update date=" + urllib.parse.unquote(request.query.date) + ", updated_at=NOW()")
+    cursor.execute("INSERT INTO `integrated_value` (`server_id`, `integrated_power`, `power_delta`, `power_charge`, `created_at`, `created_user`, `updated_at`, `updated_user`) VALUES (" + request.query.server_id + ", " + request.query.integrated_power + ", " + _30min_power + ", 0," + urllib.parse.unquote(request.query.date)+ "," + request.query.user_id + ", NOW(), " + request.query.user_id + ") on duplicate key update date=" + urllib.parse.unquote(request.query.date) + ", updated_at=NOW()")
 
     # コミット
-    connector.commit();
+    integrated_connector.commit()
     
     
 
@@ -110,7 +118,8 @@ def input_integrated_power():
     
 
 # コネクターをクローズ
-connector.close
+integrated_connector.close
+instantaneous_connector.close
 
 # サーバ起動
 run(host='0.0.0.0', port=8080, debug=True, reloader=True)

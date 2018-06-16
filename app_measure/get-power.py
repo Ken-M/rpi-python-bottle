@@ -28,13 +28,12 @@ def parthE7(EDT) :
     # 内容が瞬時電力計測値(E7)だったら
     hexPower = EDT[-8:]    # 最後の4バイト（16進数で8文字）が瞬時電力計測値
     intPower = int(hexPower, 16)
-    filename = WRITE_PATH + POWER_FILE_NAME
     d = datetime.datetime.today()
 
     body = "瞬時電力:"+str(intPower)+"[W]"
     body = body + "(" +d.strftime("%H:%M:%S") + ")"
     
-    response = urllib.request.urlopen('http://172.17.0.4:8080/input_instantaneous?server_id=1&power=' + str(intPower) + '&date=' + urllib.parse.quote(d.strftime("%Y/%m/%d %H:%M:%S", ''))'&user_id=1')
+    response = urllib.request.urlopen('http://172.17.0.4:8080/input_instantaneous?server_id=1&power=' + str(intPower) + '&date=' + urllib.parse.quote(d.strftime("%Y/%m/%d %H:%M:%S", '')) + '&user_id=1')
     data = response.read()
     
     print ( "サーバレスポンス : ", data )	
@@ -42,32 +41,32 @@ def parthE7(EDT) :
     logger.info(body)
 
 def parthEA(EDT) :
-	hexYear    = EDT[-22:-22+4]
-	hexMonth   = EDT[-18:-18+2]
-	hexDay     = EDT[-16:-16+2]
-	hexHour    = EDT[-14:-14+2]
-	hexMinutes = EDT[-12:-12+2]
-	hexSeconds = EDT[-10:-10+2]
-	hexPower   = EDT[-8:]
+    hexYear    = EDT[-22:-22+4]
+    hexMonth   = EDT[-18:-18+2]
+    hexDay     = EDT[-16:-16+2]
+    hexHour    = EDT[-14:-14+2]
+    hexMinutes = EDT[-12:-12+2]
+    hexSeconds = EDT[-10:-10+2]
+    hexPower   = EDT[-8:]
 
-	d = datetime.datetime(int(hexYear,16),
+    d = datetime.datetime(int(hexYear,16),
                           int(hexMonth,16),
                           int(hexDay,16),
                           int(hexHour,16),
                           int(hexMinutes,16),
                           int(hexSeconds,16))    
 
-	intPower = int(hexPower,16) * coeff * unit
+    intPower = int(hexPower,16) * coeff * unit
 
-	body = "積算電力:"+str(intPower)+"[kWh]"
-	body = body + "(" +d.strftime("%Y/%m/%d %H:%M:%S") + ")"
+    body = "積算電力:"+str(intPower)+"[kWh]"
+    body = body + "(" +d.strftime("%Y/%m/%d %H:%M:%S") + ")"
 	
-    response = urllib.request.urlopen('http://172.17.0.4:8080/input_integrated?server_id=1&integrated_power=' + str(intPower) + '&date=' + urllib.parse.quote(d.strftime("%Y/%m/%d %H:%M:%S", ''))'&user_id=1')
+    response = urllib.request.urlopen('http://172.17.0.4:8080/input_integrated?server_id=1&integrated_power=' + str(intPower) + '&date=' + urllib.parse.quote(d.strftime("%Y/%m/%d %H:%M:%S", '')) + '&user_id=1')
     data = response.read()
     
     print ( "サーバレスポンス : ", data )	
 	
-	logger.info(body)
+    logger.info(body)
 
 def parthD3(EDT) :
 	# 係数
@@ -135,30 +134,30 @@ def sendCommand(command_str) :
         CUR_POSITION = 24
         
         if seoj == "028801" and ESV == "72" :
-			while OPC_COUNT < OPC :
+            while OPC_COUNT < OPC :
 				# スマートメーター(028801)から来た応答(72)なら
-				EPC = res[CUR_POSITION:CUR_POSITION+2]
-				CUR_POSITION+=2
-				EPD_hex = res[CUR_POSITION:CUR_POSITION+2]
-				EPD = int(EPD_hex, 16)
-				CUR_POSITION+=2
-				EDT = ""
-				if EPD > 0 :
-					EDT = res[CUR_POSITION:CUR_POSITION+2*EPD]
-					CUR_POSITION+=2*EPD
-				if EPC == "E7" :
-					# 内容が瞬時電力計測値(E7)だったら
-					parthE7(EDT)
-				if EPC == "EA" :
-					# 内容がEAだったら
-					parthEA(EDT)
-				if EPC == "D3" :
-					# 内容がEAだったら
-					parthD3(EDT)
-				if EPC == "E1" :
-					# 内容がEAだったら
-					parthE1(EDT)
-				OPC_COUNT+=1
+                EPC = res[CUR_POSITION:CUR_POSITION+2]
+                CUR_POSITION+=2
+                EPD_hex = res[CUR_POSITION:CUR_POSITION+2]
+                EPD = int(EPD_hex, 16)
+                CUR_POSITION+=2
+                EDT = ""
+                if EPD > 0 :
+                    EDT = res[CUR_POSITION:CUR_POSITION+2*EPD]
+                    CUR_POSITION+=2*EPD
+                if EPC == "E7" :
+                    # 内容が瞬時電力計測値(E7)だったら
+                    parthE7(EDT)
+                if EPC == "EA" :
+                    # 内容がEAだったら
+                    parthEA(EDT)
+                if EPC == "D3" :
+                    # 内容がEAだったら
+                    parthD3(EDT)
+                if EPC == "E1" :
+                    # 内容がEAだったら
+                    parthE1(EDT)
+                OPC_COUNT+=1
 
 
 #ファイル出力設定
@@ -195,7 +194,7 @@ ser.write("SKSETRBID " + rbid + "\r\n")
 ser.readline()
 ser.readline()
 
-scanDuration = 4;   # スキャン時間。サンプルでは6なんだけど、4でも行けるので。（ダメなら増やして再試行）
+scanDuration = 4   # スキャン時間。サンプルでは6なんだけど、4でも行けるので。（ダメなら増やして再試行）
 scanRes = {} # スキャン結果の入れ物
 
 # スキャンのリトライループ（何か見つかるまで）
@@ -255,7 +254,7 @@ ipv6Addr = ser.readline().strip()
 #print(ipv6Addr)
 
 # PANA 接続シーケンスを開始します。
-ser.write("SKJOIN " + ipv6Addr + "\r\n");
+ser.write("SKJOIN " + ipv6Addr + "\r\n")
 #print(ser.readline(), end="") # エコーバック
 #print(ser.readline(), end="") # OKが来るはず（チェック無し）
 logger.info(ser.readline())
