@@ -107,7 +107,7 @@ def sendCommand(command_str) :
     command = "SKSENDTO 1 {0} 0E1A 1 {1:04X} {2}".format(ipv6Addr, len(command_str), command_str)
     logger.info(command)
     # コマンド送信
-    ser.write(command)
+    ser.write(command.encode())
 
     #print(ser.readline(), end="") # エコーバック
     #print(ser.readline(), end="") # EVENT 21 が来るはず（チェック無し）
@@ -185,12 +185,12 @@ serialPortDev = '/dev/ttyUSB0'  # Linux(ラズパイなど）の場合
 ser = serial.Serial(serialPortDev, 115200)
 
 # Bルート認証パスワード設定
-ser.write("SKSETPWD C " + rbpwd + "\r\n")
+ser.write(("SKSETPWD C " + rbpwd + "\r\n").encode())
 ser.readline()
 ser.readline()
 
 # Bルート認証ID設定
-ser.write("SKSETRBID " + rbid + "\r\n")
+ser.write(("SKSETRBID " + rbid + "\r\n").encode())
 ser.readline()
 ser.readline()
 
@@ -201,7 +201,7 @@ scanRes = {} # スキャン結果の入れ物
 while not scanRes.has_key("Channel") :
     # アクティブスキャン（IE あり）を行う
     # 時間かかります。10秒ぐらい？
-    ser.write("SKSCAN 2 FFFFFFFF " + str(scanDuration) + "\r\n")
+    ser.write(("SKSCAN 2 FFFFFFFF " + str(scanDuration) + "\r\n").encode())
 
     # スキャン1回について、スキャン終了までのループ
     scanEnd = False
@@ -232,14 +232,14 @@ while not scanRes.has_key("Channel") :
         sys.exit()  #### 糸冬了 ####
 
 # スキャン結果からChannelを設定。
-ser.write("SKSREG S2 " + scanRes["Channel"] + "\r\n")
+ser.write(("SKSREG S2 " + scanRes["Channel"] + "\r\n").encode())
 logger.info(ser.readline())
 logger.info(ser.readline())
 #print(ser.readline(), end="") # エコーバック
 #print(ser.readline(), end="") # OKが来るはず（チェック無し）
 
 # スキャン結果からPan IDを設定
-ser.write("SKSREG S3 " + scanRes["Pan ID"] + "\r\n")
+ser.write(("SKSREG S3 " + scanRes["Pan ID"] + "\r\n").encode())
 #print(ser.readline(), end="") # エコーバック
 #print(ser.readline(), end="") # OKが来るはず（チェック無し）
 logger.info(ser.readline())
@@ -247,14 +247,14 @@ logger.info(ser.readline())
 
 # MACアドレス(64bit)をIPV6リンクローカルアドレスに変換。
 # (BP35A1の機能を使って変換しているけど、単に文字列変換すればいいのではという話も？？)
-ser.write("SKLL64 " + scanRes["Addr"] + "\r\n")
+ser.write(("SKLL64 " + scanRes["Addr"] + "\r\n").encode())
 #print(ser.readline(), end="") # エコーバック
 logger.info(ser.readline())
 ipv6Addr = ser.readline().strip()
 #print(ipv6Addr)
 
 # PANA 接続シーケンスを開始します。
-ser.write("SKJOIN " + ipv6Addr + "\r\n")
+ser.write(("SKJOIN " + ipv6Addr + "\r\n").encode())
 #print(ser.readline(), end="") # エコーバック
 #print(ser.readline(), end="") # OKが来るはず（チェック無し）
 logger.info(ser.readline())
