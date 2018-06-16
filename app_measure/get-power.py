@@ -121,7 +121,7 @@ def sendCommand(command_str) :
     # 受信データはたまに違うデータが来たり、
     # 取りこぼしたりして変なデータを拾うことがあるので
     # チェックを厳しめにしてます。
-    if line.startswith("ERXUDP") :
+    if line.startswith("ERXUDP".encode()) :
         cols = line.strip().split(' ')
         res = cols[8]   # UDP受信データ部分
         #tid = res[4:4+4];
@@ -209,10 +209,10 @@ while "Channel" not in scanRes :
         line = ser.readline()
         logger.info(line)
 
-        if line.startswith("EVENT 22") :
+        if line.startswith("EVENT 22".encode()) :
             # スキャン終わったよ（見つかったかどうかは関係なく）
             scanEnd = True
-        elif line.startswith("  ") :
+        elif line.startswith("  ".encode()) :
             # スキャンして見つかったらスペース2個あけてデータがやってくる
             # 例
             #  Channel:39
@@ -265,11 +265,11 @@ bConnected = False
 while not bConnected :
     line = ser.readline()
     #print(line, end="")
-    if line.startswith("EVENT 24") :
+    if line.startswith("EVENT 24".encode()) :
         logger.error("PANA 接続失敗")
         ser.close()
         sys.exit()  #### 糸冬了 ####
-    elif line.startswith("EVENT 25") :
+    elif line.startswith("EVENT 25".encode()) :
         # 接続完了！
         bConnected = True
 
