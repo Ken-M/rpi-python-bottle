@@ -33,7 +33,7 @@ def parthE7(EDT) :
     body = "瞬時電力:"+str(intPower)+"[W]"
     body = body + "(" +d.strftime("%H:%M:%S") + ")"
     
-    response = urllib.request.urlopen('http://172.17.0.4:8080/input_instantaneous?server_id=1&power=' + str(intPower) + '&date=' + urllib.parse.quote(d.strftime("%Y/%m/%d %H:%M:%S", '')) + '&user_id=1')
+    response = urllib.request.urlopen('http://172.17.0.4:8080/input_instantaneous?server_id=1&power=' + str(intPower) + '&date=' + urllib.parse.quote(d.strftime("%Y/%m/%d %H:%M:%S")) + '&user_id=1')
     data = response.read()
     
     print ( "サーバレスポンス : ", data )	
@@ -61,7 +61,7 @@ def parthEA(EDT) :
     body = "積算電力:"+str(intPower)+"[kWh]"
     body = body + "(" +d.strftime("%Y/%m/%d %H:%M:%S") + ")"
 	
-    response = urllib.request.urlopen('http://172.17.0.4:8080/input_integrated?server_id=1&integrated_power=' + str(intPower) + '&date=' + urllib.parse.quote(d.strftime("%Y/%m/%d %H:%M:%S", '')) + '&user_id=1')
+    response = urllib.request.urlopen('http://172.17.0.4:8080/input_integrated?server_id=1&integrated_power=' + str(intPower) + '&date=' + urllib.parse.quote(d.strftime("%Y/%m/%d %H:%M:%S")) + '&user_id=1')
     data = response.read()
     
     print ( "サーバレスポンス : ", data )	
