@@ -53,4 +53,6 @@ services:
       entrypoint:
        - /usr/local/bin/python3
        - /home/bottle/app/get-power.py
+      cap_add:
+       - SYS_RAWIO
 
