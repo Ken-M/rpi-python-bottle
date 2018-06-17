@@ -48,6 +48,8 @@ services:
        - ./app_measure:/home/bottle/app
       environment:
         CODEIGNITER_ENV: development
+      devices:
+       - "/dev/ttyUSB0:/dev/ttyUSB0"
       entrypoint:
        - /usr/local/bin/python3
        - /home/bottle/app/get-power.py

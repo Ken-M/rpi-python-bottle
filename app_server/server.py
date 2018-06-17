@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 # bottleのライブラリ
 from bottle import route, run, request
 
@@ -108,9 +111,7 @@ def input_integrated_power():
     cursor.execute("INSERT INTO `integrated_value` (`server_id`, `integrated_power`, `power_delta`, `power_charge`, `created_at`, `created_user`, `updated_at`, `updated_user`) VALUES (" + request.query.server_id + ", " + request.query.integrated_power + ", " + _30min_power + ", 0," + urllib.parse.unquote(request.query.date)+ "," + request.query.user_id + ", NOW(), " + request.query.user_id + ") on duplicate key update date=" + urllib.parse.unquote(request.query.date) + ", updated_at=NOW()")
 
     # コミット
-    integrated_connector.commit()
-    
-    
+    integrated_connector.commit()   
 
     cursor.close
 
