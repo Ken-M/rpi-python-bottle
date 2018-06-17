@@ -61,7 +61,7 @@ RUN python3 ./setup.py build
 RUN python3 ./setup.py install
 
 RUN usermod -a -G tty bottle
-RUN usermod -a -G tty dialout
+RUN usermod -a -G dialout bottle
 # RUN chmod 0666 /dev/ttyUSB0
 USER bottle
 
