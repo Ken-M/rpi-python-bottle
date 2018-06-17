@@ -8,7 +8,6 @@ volumes:
       o: bind
       
 services:
-
     mysql:
       container_name: rpi-python-bottle-db
       image: hypriot/rpi-mysql
@@ -21,8 +20,11 @@ services:
         MYSQL_USER: bottle
         MYSQL_PASSWORD: bottle
         MYSQL_DATABASE: instantaneous_measurement
-      ports:
-        - "3306:3306"
+      expose:
+        - "3306"
+      networks:
+        app_net:
+          ipv4_address: 172.17.0.3
 
 
     server-application:
@@ -31,6 +33,8 @@ services:
       tty: false
       volumes:
        - ./app_server:/home/bottle/app
+      expose:
+        - "8080"        
       ports:
         - "8080:8080"
       environment:
@@ -38,7 +42,9 @@ services:
       entrypoint:
        - /usr/local/bin/python3
        - /home/bottle/app/server.py
-       
+      networks:
+        app_net:
+          ipv4_address: 172.17.0.4       
         
     measure-application:
       container_name: rpi-python-bottle-app-measure
