@@ -112,16 +112,16 @@ def sendCommand(command_str) :
     #print(ser.readline(), end="") # エコーバック
     #print(ser.readline(), end="") # EVENT 21 が来るはず（チェック無し）
     #print(ser.readline(), end="") # OKが来るはず（チェック無し）
-    logger.info(ser.readline())
-    logger.info(ser.readline())
-    logger.info(ser.readline())
-    line = ser.readline()         # ERXUDPが来るはず
+    logger.info(str(ser.readline()))
+    logger.info(str(ser.readline()))
+    logger.info(str(ser.readline()))
+    line = str(ser.readline())         # ERXUDPが来るはず
     logger.info(line)
 
     # 受信データはたまに違うデータが来たり、
     # 取りこぼしたりして変なデータを拾うことがあるので
     # チェックを厳しめにしてます。
-    if line.startswith("ERXUDP".encode()) :
+    if line.startswith("ERXUDP") :
         cols = line.strip().split(' ')
         res = cols[8]   # UDP受信データ部分
         #tid = res[4:4+4];
@@ -206,13 +206,13 @@ while "Channel" not in scanRes :
     # スキャン1回について、スキャン終了までのループ
     scanEnd = False
     while not scanEnd :
-        line = ser.readline()
+        line = str(ser.readline())
         logger.info(line)
 
-        if line.startswith("EVENT 22".encode()) :
+        if line.startswith("EVENT 22") :
             # スキャン終わったよ（見つかったかどうかは関係なく）
             scanEnd = True
-        elif line.startswith("  ".encode()) :
+        elif line.startswith("  ") :
             # スキャンして見つかったらスペース2個あけてデータがやってくる
             # 例
             #  Channel:39
@@ -233,8 +233,8 @@ while "Channel" not in scanRes :
 
 # スキャン結果からChannelを設定。
 ser.write(("SKSREG S2 " + scanRes["Channel"] + "\r\n").encode())
-logger.info(ser.readline())
-logger.info(ser.readline())
+logger.info(str(ser.readline()))
+logger.info(str(ser.readline()))
 #print(ser.readline(), end="") # エコーバック
 #print(ser.readline(), end="") # OKが来るはず（チェック無し）
 
@@ -242,34 +242,34 @@ logger.info(ser.readline())
 ser.write(("SKSREG S3 " + scanRes["Pan ID"] + "\r\n").encode())
 #print(ser.readline(), end="") # エコーバック
 #print(ser.readline(), end="") # OKが来るはず（チェック無し）
-logger.info(ser.readline())
-logger.info(ser.readline())
+logger.info(str(ser.readline()))
+logger.info(str(ser.readline()))
 
 # MACアドレス(64bit)をIPV6リンクローカルアドレスに変換。
 # (BP35A1の機能を使って変換しているけど、単に文字列変換すればいいのではという話も？？)
 ser.write(("SKLL64 " + scanRes["Addr"] + "\r\n").encode())
 #print(ser.readline(), end="") # エコーバック
-logger.info(ser.readline())
-ipv6Addr = ser.readline().strip()
+logger.info(str(ser.readline()))
+ipv6Addr = str(ser.readline()).strip()
 #print(ipv6Addr)
 
 # PANA 接続シーケンスを開始します。
 ser.write(("SKJOIN " + ipv6Addr + "\r\n").encode())
 #print(ser.readline(), end="") # エコーバック
 #print(ser.readline(), end="") # OKが来るはず（チェック無し）
-logger.info(ser.readline())
-logger.info(ser.readline())
+logger.info(str(ser.readline()))
+logger.info(str(ser.readline()))
 
 # PANA 接続完了待ち（10行ぐらいなんか返してくる）
 bConnected = False
 while not bConnected :
-    line = ser.readline()
+    line = str(ser.readline())
     #print(line, end="")
-    if line.startswith("EVENT 24".encode()) :
+    if line.startswith("EVENT 24") :
         logger.error("PANA 接続失敗")
         ser.close()
         sys.exit()  #### 糸冬了 ####
-    elif line.startswith("EVENT 25".encode()) :
+    elif line.startswith("EVENT 25") :
         # 接続完了！
         bConnected = True
 
@@ -278,7 +278,7 @@ ser.timeout = 8
 
 # スマートメーターがインスタンスリスト通知を投げてくる
 # (ECHONET-Lite_Ver.1.12_02.pdf p.4-16)
-logger.info(ser.readline())
+logger.info(str(ser.readline()))
 
 GetEnd = True
 while True :
