@@ -61,7 +61,7 @@ RUN python3 ./setup.py build
 RUN python3 ./setup.py install
 
 RUN usermod -a -G tty bottle
-RUN chmod 0666 /dev/ttyUSB0
+# RUN chmod 0666 /dev/ttyUSB0
 USER bottle
 
 # vim の設定ファイル

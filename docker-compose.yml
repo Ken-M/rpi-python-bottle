@@ -49,7 +49,7 @@ services:
       environment:
         CODEIGNITER_ENV: development
       devices:
-       - "/dev/ttyUSB0:/dev/ttyUSB0"
+       - "/dev/ttyUSB0:/dev/ttyUSB0:rwm"
       entrypoint:
        - /usr/local/bin/python3
        - /home/bottle/app/get-power.py
