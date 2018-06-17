@@ -198,7 +198,7 @@ scanDuration = 4   # スキャン時間。サンプルでは6なんだけど、4
 scanRes = {} # スキャン結果の入れ物
 
 # スキャンのリトライループ（何か見つかるまで）
-while "Channel" not in scanRes :
+while b"Channel" not in scanRes :
     # アクティブスキャン（IE あり）を行う
     # 時間かかります。10秒ぐらい？
     ser.write(("SKSCAN 2 FFFFFFFF " + str(scanDuration) + "\r\n").encode())
@@ -209,10 +209,10 @@ while "Channel" not in scanRes :
         line = str(ser.readline())
         logger.info(line)
 
-        if line.startswith("EVENT 22") :
+        if line.startswith(b"EVENT 22") :
             # スキャン終わったよ（見つかったかどうかは関係なく）
             scanEnd = True
-        elif line.startswith("  ") :
+        elif line.startswith(b"  ") :
             # スキャンして見つかったらスペース2個あけてデータがやってくる
             # 例
             #  Channel:39
@@ -225,7 +225,7 @@ while "Channel" not in scanRes :
             scanRes[cols[0]] = cols[1]
     scanDuration+=1
 
-    if 14 < scanDuration and "Channel" not in scanRes:
+    if 14 < scanDuration and b"Channel" not in scanRes:
         # 引数としては14まで指定できるが、7で失敗したらそれ以上は無駄っぽい
         logger.error("スキャンリトライオーバー")
         ser.close()
@@ -265,11 +265,11 @@ bConnected = False
 while not bConnected :
     line = str(ser.readline())
     #print(line, end="")
-    if line.startswith("EVENT 24") :
+    if line.startswith(b"EVENT 24") :
         logger.error("PANA 接続失敗")
         ser.close()
         sys.exit()  #### 糸冬了 ####
-    elif line.startswith("EVENT 25") :
+    elif line.startswith(b"EVENT 25") :
         # 接続完了！
         bConnected = True
 
