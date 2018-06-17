@@ -60,7 +60,7 @@ WORKDIR mysql-connector-python
 RUN python3 ./setup.py build
 RUN python3 ./setup.py install
 
-
+RUN usermod -a -G tty bottle
 USER bottle
 
 # vim の設定ファイル
