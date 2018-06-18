@@ -21,14 +21,14 @@ import datetime
 instantaneous_connector = mysql.connector.connect (
             user     = 'bottle',
             password = 'bottle',
-            host     = '172.17.1.3',
+            host     = '172.19.0.3',
             database = 'instantaneous_measurement'
 )
 
 integrated_connector = mysql.connector.connect (
             user     = 'bottle',
             password = 'bottle',
-            host     = '172.17.1.3',
+            host     = '172.19.0.3',
             database = 'integrated_measurement'
 )
 
