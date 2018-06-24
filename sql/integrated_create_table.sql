@@ -1,4 +1,3 @@
-
 CREATE DATABASE IF NOT EXISTS `integrated_measurement` ;
 GRANT ALL ON `integrated_measurement`.* TO '$MYSQL_USER'@'%' ;
 FLUSH PRIVILEGES ;
@@ -14,6 +13,6 @@ CREATE TABLE IF NOT EXISTS `integrated_value` (
   `created_at`   datetime NOT NULL PRIMARY KEY,
   `created_user` int(11) NOT NULL,
   `updated_at`   datetime NOT NULL,
-  `updated_user` int(11) NOT NULL,
+  `updated_user` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
