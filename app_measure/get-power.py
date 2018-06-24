@@ -71,7 +71,7 @@ def parthEA(EDT) :
     response = urllib.request.urlopen(url_str)
     data = response.read()
 
-     print ( "URL: ", url_str )	   
+    print ( "URL: ", url_str )	   
     print ( "サーバレスポンス : ", data )	
 
 
