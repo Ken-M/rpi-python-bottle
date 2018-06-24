@@ -56,15 +56,15 @@ def instantaneous_list():
 @route('/integrated_list')
 def integratd_list():
     cursor = integrated_connector.cursor()
-    cursor.execute("select `id`, `integrated_power`, `power_delta`, `created_at` from integrated_value")
+    cursor.execute("select `integrated_power`, `power_delta`, `created_at` from integrated_value")
 
     disp  = "<table>"
     # ヘッダー
-    disp += "<tr><th>ID</th><th>積算電力(kWh)</th><th>差分(kwH)</th><th>計測日</th></tr>"
+    disp += "<tr><th>積算電力(kWh)</th><th>差分(kwH)</th><th>計測日</th></tr>"
     
     # 一覧部分
     for row in cursor.fetchall():
-        disp += "<tr><td>" + str(row[0]) + "</td><td>" + str(row[1]) + "</td><td>" + str(row[2]) + "</td><td>" + str(row[3]) + "</td></tr>"
+        disp += "<tr><td>" + str(row[0]) + "</td><td>" + str(row[1]) + "</td><td>" + str(row[2]) + "</td><td>"
     
     disp += "</table>"
     
