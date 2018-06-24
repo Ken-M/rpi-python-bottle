@@ -105,10 +105,10 @@ def parthE1(EDT) :
 
 def sendCommand(command_str) :
     command_base = "SKSENDTO 1 {0} 0E1A 1 {1:04X} ".format(ipv6Addr, len(command_str))
-    command = command_base.encode() + command_str
-    logger.info(command)
+    command = command_base + command_str.decode('utf-8')
+    logger.info("SEND: " + command)
     # コマンド送信
-    ser.write(command)
+    ser.write(command.encode())
 
     #print(ser.readline(), end="") # エコーバック
     #print(ser.readline(), end="") # EVENT 21 が来るはず（チェック無し）
