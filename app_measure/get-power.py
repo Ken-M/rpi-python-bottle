@@ -32,13 +32,14 @@ def parthE7(EDT) :
 
     body = "瞬時電力:"+str(intPower)+"[W]"
     body = body + "(" +d.strftime("%H:%M:%S") + ")"
-    
+    logger.info(body)
+
     response = urllib.request.urlopen('http://172.19.0.4:8080/input_instantaneous?server_id=1&power=' + str(intPower) + '&date=' + urllib.parse.quote(d.strftime("%Y/%m/%d %H:%M:%S")) + '&user_id=1')
     data = response.read()
     
     print ( "サーバレスポンス : ", data )	
     
-    logger.info(body)
+
 
 def parthEA(EDT) :
     hexYear    = EDT[-22:-22+4]
@@ -60,13 +61,13 @@ def parthEA(EDT) :
 
     body = "積算電力:"+str(intPower)+"[kWh]"
     body = body + "(" +d.strftime("%Y/%m/%d %H:%M:%S") + ")"
-	
+    logger.info(body)
+
     response = urllib.request.urlopen('http://172.19.0.4:8080/input_integrated?server_id=1&integrated_power=' + str(intPower) + '&date=' + urllib.parse.quote(d.strftime("%Y/%m/%d %H:%M:%S")) + '&user_id=1')
     data = response.read()
     
     print ( "サーバレスポンス : ", data )	
-	
-    logger.info(body)
+
 
 def parthD3(EDT) :
 	# 係数
@@ -105,7 +106,7 @@ def parthE1(EDT) :
 
 def sendCommand(command_str) :
     command_base = "SKSENDTO 1 {0} 0E1A 1 {1:04X} ".format(ipv6Addr, len(command_str))
-    command = command_base + command_str.decode('utf-8')
+    command = command_base.encode() + command_str 
     logger.info("SEND: " + command)
     # コマンド送信
     ser.write(command.encode())
