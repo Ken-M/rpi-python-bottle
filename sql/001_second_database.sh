@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 echo "CREATE DATABASE IF NOT EXISTS \`integrated_measurement\` ;" | "${mysql[@]}"
 echo "GRANT ALL ON \`integrated_measurement\`.* TO '"$MYSQL_USER"'@'%' ;" | "${mysql[@]}"
