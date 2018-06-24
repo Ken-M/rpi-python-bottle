@@ -1,3 +1,8 @@
+
+CREATE DATABASE IF NOT EXISTS `integrated_measurement` ;
+GRANT ALL ON `integrated_measurement`.* TO '$MYSQL_USER'@'%' ;
+FLUSH PRIVILEGES ;
+
 USE integrated_measurement;
 
 CREATE TABLE IF NOT EXISTS `integrated_value` (
