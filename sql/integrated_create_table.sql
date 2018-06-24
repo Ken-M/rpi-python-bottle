@@ -5,7 +5,6 @@ FLUSH PRIVILEGES ;
 USE integrated_measurement;
 
 CREATE TABLE IF NOT EXISTS `integrated_value` (
-  `id`           int(11) NOT NULL AUTO_INCREMENT,
   `server_id`    int(11) NOT NULL,
   `integrated_power`  int(11) NOT NULL,
   `power_delta`  int(11) NOT NULL,
