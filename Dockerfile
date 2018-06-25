@@ -12,6 +12,7 @@ RUN apt-get upgrade -y
 RUN apt-get install -y 	vim \
 						sudo \
                         wget \
+                        net-tools \
                         git
 
 # Python3インストールに必要
@@ -47,6 +48,7 @@ RUN pip3 install virtualenv \
 				bottle \
 				ipython \
 				flake8 \
+                docker-host-ip \
                 pyserial
 
 # ユーザ作成

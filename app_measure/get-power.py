@@ -15,6 +15,7 @@ import logging.handlers
 import datetime
 import locale
 import urllib.request
+import docker_host_ip
 
 coeff = 1
 unit = 0.1
@@ -32,7 +33,8 @@ def parthE7(EDT) :
 
     body = "瞬時電力:"+str(intPower)+"[W]"
     body = body + "(" +d.strftime("%H:%M:%S") + ")"
-    url_str = 'http://172.19.0.4:8080/input_instantaneous?server_id=1&power=' + str(intPower) + '&user_id=1'
+    host_ip = docker_host_ip.get_docker_host_ip()
+    url_str = 'http://' + host_ip + ':8080/input_instantaneous?server_id=1&power=' + str(intPower) + '&user_id=1'
     logger.info(body)
     logger.info(url_str)
 
@@ -64,7 +66,8 @@ def parthEA(EDT) :
 
     body = "積算電力:"+str(intPower)+"[kWh]"
     body = body + "(" +d.strftime("%Y/%m/%d %H:%M:%S") + ")"
-    url_str = 'http://172.19.0.4:8080/input_integrated?server_id=1&integrated_power=' + str(intPower) + '&date=' + urllib.parse.quote(d.strftime("%Y/%m/%d %H:%M:%S")) + '&user_id=1'
+    host_ip = docker_host_ip.get_docker_host_ip()
+    url_str = 'http://' + host_ip + ':8080/input_integrated?server_id=1&integrated_power=' + str(intPower) + '&date=' + urllib.parse.quote(d.strftime("%Y/%m/%d %H:%M:%S")) + '&user_id=1'
     logger.info(body)
     logger.info(url_str)
 
