@@ -8,6 +8,8 @@ from bottle import route, run, request
 import mysql.connector
 import urllib.parse
 import datetime
+import logging
+import logging.handlers
 
 # 補足
 # 本当はテンプレートを入れるとHTMLが綺麗になります。
@@ -32,7 +34,10 @@ integrated_connector = mysql.connector.connect (
             database = 'integrated_measurement'
 )
 
-
+logger = logging.getLogger('Logging')
+logname = "/var/log/tools/bottle_server.log"
+fmt = "%(asctime)s %(levelname)s %(name)s :%(message)s"
+logging.basicConfig(level=10, format=fmt)
 			
 @route('/instantaneous_list')
 def instantaneous_list():
@@ -74,6 +79,8 @@ def integratd_list():
 
 @route('/input_instantaneous')
 def input_instantaneous_power():
+    logger.info(request.query)
+
     # 瞬時値を入力
     cursor = instantaneous_connector.cursor()
     cursor.execute("INSERT INTO `instantaneous_value` (`server_id`, `power`, `created_at`, `created_user`, `updated_at`, `updated_user`) VALUES (" + request.query.server_id + ", " + request.query.power + ", NOW(), " + request.query.user_id + ", NOW(), " + request.query.user_id + ")")
@@ -88,6 +95,7 @@ def input_instantaneous_power():
     
 @route('/input_integrated')
 def input_integrated_power():
+    logger.info(request.query)
     # 積算値を入力
     cursor = integrated_connector.cursor()
     
