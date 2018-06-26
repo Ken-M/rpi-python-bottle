@@ -62,6 +62,9 @@ services:
       privileged: true
       cap_add:
        - SYS_RAWIO
+      networks:
+        app_net:
+          ipv4_address: 172.19.0.5  
 
 networks:
   app_net:

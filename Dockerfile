@@ -48,7 +48,6 @@ RUN pip3 install virtualenv \
 				bottle \
 				ipython \
 				flake8 \
-                docker-host-ip \
                 pyserial
 
 # ユーザ作成
