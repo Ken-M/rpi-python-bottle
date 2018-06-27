@@ -105,7 +105,6 @@ def input_integrated_power():
     logger.info(d)
     
     # 30分前
-    _30min_before = datetime.datetime.today
     _30min_before = d + datetime.timedelta(minutes=-30)
     _30min_before_str = _30min_before.strftime("%Y/%m/%d %H:%M:%S")
     logger.info(_30min_before_str)
@@ -117,7 +116,7 @@ def input_integrated_power():
     
     record = cursor.fetchone()
     logger.info(record)
-    
+
     if record != None :
         logger.info("found:"+str(cursor.fetchone()[1]))
    	    # ToDo: オーバーフロー処理
