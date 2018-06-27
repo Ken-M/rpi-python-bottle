@@ -65,15 +65,15 @@ def parthEA(EDT) :
 
     body = "積算電力:"+str(intPower)+"[kWh]"
     body = body + "(" +d.strftime("%Y/%m/%d %H:%M:%S") + ")"
-    url_str = 'http://172.19.0.4:8080/input_integrated?server_id=1&integrated_power=' + str(intPower) + '&date=' + urllib.parse.quote(d.strftime("%Y/%m/%d %H:%M:%S")) + '&user_id=1'
+    url_str2 = 'http://172.19.0.4:8080/input_integrated?server_id=1&integrated_power=' + str(intPower) + '&date=' + urllib.parse.quote(d.strftime("%Y/%m/%d %H:%M:%S")) + '&user_id=1'
     logger.info(body)
-    logger.info(url_str)
+    logger.info(url_str2)
 
-    response = urllib.request.urlopen(url_str)
-    data = response.read()
+    response2 = urllib.request.urlopen(url_str2)
+    data2 = response2.read()
 
-    print ( "URL: ", url_str )	   
-    print ( "サーバレスポンス : ", data )	
+    print ( "URL: ", url_str2 )	   
+    print ( "サーバレスポンス : ", data2 )	
 
 
 def parthD3(EDT) :

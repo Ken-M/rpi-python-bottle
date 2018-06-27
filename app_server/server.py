@@ -102,21 +102,28 @@ def input_integrated_power():
     d = datetime.datetime.today()
     date_str = urllib.parse.unquote(request.query.date)
     d.strptime(date_str, "%Y/%m/%d %H:%M:%S")
+    logger.info(date_str)
+    logger.info(d)
     
     # 30分前
     _30min_before = datetime.datetime.today
-    _30min_before = d - datetime.timedelta(minutes=-30)
+    _30min_before = d + datetime.timedelta(minutes=-30)
     _30min_before_str = _30min_before.strftime("%Y/%m/%d %H:%M:%S")
-    
+    logger.info(_30min_before_str)
+
     # 30分前の積算値を取得
     cursor.execute("select `id`, `integrated_power`, `created_at` from integrated_value where created_at = " + _30min_before_str)
     
     _30min_power = 0
     
-   	# ToDo: オーバーフロー処理
-    _30min_power = request.query.integrated_power - cursor.fetchone()
+    record = cursor.fetchone()
+
+    if record != None :
+        logger.info("found:"+str(cursor.fetchone()[1]))
+   	    # ToDo: オーバーフロー処理
+        _30min_power = request.query.integrated_power - cursor.fetchone()[1]
     
-    cursor.execute("INSERT INTO `integrated_value` (`server_id`, `integrated_power`, `power_delta`, `power_charge`, `created_at`, `created_user`, `updated_at`, `updated_user`) VALUES (" + request.query.server_id + ", " + request.query.integrated_power + ", " + _30min_power + ", 0," + urllib.parse.unquote(request.query.date)+ "," + request.query.user_id + ", NOW(), " + request.query.user_id + ") on duplicate key update date=" + urllib.parse.unquote(request.query.date) + ", updated_at=NOW()")
+    cursor.execute("INSERT INTO `integrated_value` (`server_id`, `integrated_power`, `power_delta`, `power_charge`, `created_at`, `created_user`, `updated_at`, `updated_user`) VALUES (" + request.query.server_id + ", " + request.query.integrated_power + ", " + _30min_power + ", 0," + date_str + "," + request.query.user_id + ", NOW(), " + request.query.user_id + ") on duplicate key update date=" + date_str + ", updated_at=NOW()")
 
     # コミット
     integrated_connector.commit()   
