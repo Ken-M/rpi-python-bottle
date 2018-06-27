@@ -7,7 +7,7 @@ from bottle import route, run, request
 # MySQLドライバはmysql.connector
 import mysql.connector
 import urllib.parse
-import datetime
+from datetime import datetime
 import logging
 import logging.handlers
 
