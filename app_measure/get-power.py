@@ -40,7 +40,6 @@ def parthE7(EDT) :
     response = urllib.request.urlopen(url_str)
     data = response.read()
     
-    print ( "URL: ", url_str )	
     print ( "サーバレスポンス : ", data )	
     
 
@@ -72,7 +71,6 @@ def parthEA(EDT) :
     response2 = urllib.request.urlopen(url_str2)
     data2 = response2.read()
 
-    print ( "URL: ", url_str2 )	   
     print ( "サーバレスポンス : ", data2 )	
 
 

@@ -99,9 +99,8 @@ def input_integrated_power():
     # 積算値を入力
     cursor = integrated_connector.cursor()
     
-    d = datetime.datetime.today()
     date_str = urllib.parse.unquote(request.query.date)
-    d.strptime(date_str, "%Y/%m/%d %H:%M:%S")
+    d = datetime.strptime(date_str, "%Y/%m/%d %H:%M:%S")
     logger.info(date_str)
     logger.info(d)
     
@@ -112,7 +111,7 @@ def input_integrated_power():
     logger.info(_30min_before_str)
 
     # 30分前の積算値を取得
-    cursor.execute("select `id`, `integrated_power`, `created_at` from integrated_value where created_at = " + _30min_before_str)
+    cursor.execute("SELECT `id`, `integrated_power`, `created_at` from integrated_value WHERE created_at=" + _30min_before_str)
     
     _30min_power = 0
     
