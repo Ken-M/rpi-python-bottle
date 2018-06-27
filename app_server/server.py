@@ -116,7 +116,8 @@ def input_integrated_power():
     _30min_power = 0
     
     record = cursor.fetchone()
-
+    logger.info(record)
+    
     if record != None :
         logger.info("found:"+str(cursor.fetchone()[1]))
    	    # ToDo: オーバーフロー処理
