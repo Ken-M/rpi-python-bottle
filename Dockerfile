@@ -48,7 +48,8 @@ RUN pip3 install virtualenv \
 				bottle \
 				ipython \
 				flake8 \
-                pyserial
+                pyserial \
+                pytz
 
 # ユーザ作成
 RUN groupadd web
