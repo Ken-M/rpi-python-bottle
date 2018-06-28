@@ -8,6 +8,7 @@ from bottle import route, run, request
 import mysql.connector
 import urllib.parse
 from datetime import datetime
+import pytz
 import logging
 import logging.handlers
 
@@ -81,9 +82,11 @@ def integratd_list():
 def input_instantaneous_power():
     logger.info(request.query)
 
+    date_str = urllib.parse.unquote(request.query.date)
+
     # 瞬時値を入力
     cursor = instantaneous_connector.cursor()
-    cursor.execute("INSERT INTO `instantaneous_value` (`server_id`, `power`, `created_at`, `created_user`, `updated_at`, `updated_user`) VALUES (" + request.query.server_id + ", " + request.query.power + ", NOW(), " + request.query.user_id + ", NOW(), " + request.query.user_id + ")")
+    cursor.execute("INSERT INTO `instantaneous_value` (`server_id`, `power`, `created_at`, `created_user`, `updated_at`, `updated_user`) VALUES (" + request.query.server_id + ", " + request.query.power + ", " + date_str + ", " + request.query.user_id + ", " + date_str + ", " + request.query.user_id + ")")
 
     # コミット
     instantaneous_connector.commit()
@@ -121,7 +124,8 @@ def input_integrated_power():
         logger.info("found:"+str(cursor.fetchone()[1]))
    	    # ToDo: オーバーフロー処理
         _30min_power = request.query.integrated_power - cursor.fetchone()[1]
-    
+        
+    cursor = integrated_connector.cursor()  
     cursor.execute("INSERT INTO `integrated_value` (`server_id`, `integrated_power`, `power_delta`, `power_charge`, `created_at`, `created_user`, `updated_at`, `updated_user`) VALUES (" + request.query.server_id + ", " + request.query.integrated_power + ", " + _30min_power + ", 0," + date_str + "," + request.query.user_id + ", NOW(), " + request.query.user_id + ") on duplicate key update date=" + date_str + ", updated_at=NOW()")
 
     # コミット

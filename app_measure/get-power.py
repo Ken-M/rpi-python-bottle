@@ -29,11 +29,14 @@ def parthE7(EDT) :
     # 内容が瞬時電力計測値(E7)だったら
     hexPower = EDT[-8:]    # 最後の4バイト（16進数で8文字）が瞬時電力計測値
     intPower = int(hexPower, 16)
-    d = datetime.datetime.today()
+
+    tz = pytz.timezone('Asia/Tokyo')
+    dt = datetime.now()
+    time_stamp = tz.localize(dt)
 
     body = "瞬時電力:"+str(intPower)+"[W]"
     body = body + "(" +d.strftime("%H:%M:%S") + ")"
-    url_str = 'http://172.19.0.4:8080/input_instantaneous?server_id=1&power=' + str(intPower) + '&user_id=1'
+    url_str = 'http://172.19.0.4:8080/input_instantaneous?server_id=1&power=' + str(intPower) + '&date=' + urllib.parse.quote(time_stamp.strftime("%Y/%m/%d %H:%M:%S")) + '&user_id=1'
     logger.info(body)
     logger.info(url_str)
 
