@@ -115,7 +115,7 @@ def input_integrated_power():
     # 30分前の積算値を取得
     cursor.execute("SELECT `integrated_power`, `created_at` from integrated_value WHERE created_at='" + _30min_before_str+"'")
     
-    _30min_power = 0
+    _30min_power = float(0.0)
     
     record = cursor.fetchone()
     logger.info(record)
@@ -124,7 +124,7 @@ def input_integrated_power():
         logger.info("found:"+str(record[0]))
         logger.info("now:"+str(request.query.integrated_power))
    	    # ToDo: オーバーフロー処理
-        _30min_power = int(request.query.integrated_power) - int(record[0])
+        _30min_power = float(request.query.integrated_power) - float(record[0])
         logger.info("delta:"+str(_30min_power))
 
     cursor = integrated_connector.cursor()  
