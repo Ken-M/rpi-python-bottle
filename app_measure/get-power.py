@@ -36,7 +36,7 @@ def parthE7(EDT) :
     time_stamp = tz.localize(dt)
 
     body = "瞬時電力:"+str(intPower)+"[W]"
-    body = body + "(" +d.strftime("%H:%M:%S") + ")"
+    body = body + "(" +time_stamp.strftime("%H:%M:%S") + ")"
     url_str = 'http://172.19.0.4:8080/input_instantaneous?server_id=1&power=' + str(intPower) + '&date=' + urllib.parse.quote(time_stamp.strftime("%Y/%m/%d %H:%M:%S")) + '&user_id=1'
     logger.info(body)
     logger.info(url_str)
