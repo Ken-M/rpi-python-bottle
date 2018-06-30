@@ -32,7 +32,7 @@ def parthE7(EDT) :
     intPower = int(hexPower, 16)
 
     tz = pytz.timezone('Asia/Tokyo')
-    dt = datetime.now()
+    dt = datetime.datetime.now()
     time_stamp = tz.localize(dt)
 
     body = "瞬時電力:"+str(intPower)+"[W]"
