@@ -296,7 +296,7 @@ counter = 30
 while True :
     sendCommand(GET_NOW_POWER)
     time.sleep(10)
-    if counter > 15 :
+    if counter > 10 :
         counter = 0 
         sendCommand(GET_LATEST30)     
     counter = counter + 1
