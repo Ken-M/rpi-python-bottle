@@ -10,7 +10,8 @@ volumes:
 services:
     mysql:
       container_name: rpi-python-bottle-db
-      image: hypriot/rpi-mysql
+      build: .
+      dockerfile: Dockerfile-MySQL
       volumes:
        - ./sql:/docker-entrypoint-initdb.d
        - mysql-db:/var/lib/mysql
