@@ -122,6 +122,7 @@ def input_integrated_power():
 
     if record != None :
         logger.info("found:"+str(record[0]))
+        logger.info("now:"+str(request.query.integrated_power))
    	    # ToDo: オーバーフロー処理
         _30min_power = int(request.query.integrated_power) - int(record[0])
         logger.info("delta:"+str(_30min_power))
