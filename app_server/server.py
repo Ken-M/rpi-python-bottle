@@ -123,7 +123,7 @@ def input_integrated_power():
     if record != None :
         logger.info("found:"+str(cursor.fetchone()[0]))
    	    # ToDo: オーバーフロー処理
-        _30min_power = request.query.integrated_power - cursor.fetchone()[0]
+        _30min_power = int(request.query.integrated_power) - cursor.fetchone()[0]
 
     cursor = integrated_connector.cursor()  
     cursor.execute("INSERT INTO `integrated_value` (`server_id`, `integrated_power`, `power_delta`, `power_charge`, `created_at`, `created_user`, `updated_at`, `updated_user`) VALUES (" + request.query.server_id + ", " + request.query.integrated_power + ", " + str(_30min_power) + ", 0,'" + date_str + "'," + request.query.user_id + ", NOW(), " + request.query.user_id + ") on duplicate key update created_at='" + date_str + "', updated_at=NOW()")
