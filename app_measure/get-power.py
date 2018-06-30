@@ -292,11 +292,15 @@ ser.timeout = 8
 logger.info(str(ser.readline().decode('utf-8')))
 
 GetEnd = True
+counter = 0
 while True :
-	sendCommand(GET_NOW_POWER)
-	time.sleep(10)
-	sendCommand(GET_LATEST30)
-	time.sleep(20)
+    sendCommand(GET_NOW_POWER)
+    time.sleep(10)
+    counter = counter + 1
+    if counter > 30 :
+        counter = 0 
+        sendCommand(GET_LATEST30)     
+    time.sleep(20)
 
 # 無限ループだからここには来ないけどな
 ser.close()
