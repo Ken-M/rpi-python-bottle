@@ -125,7 +125,12 @@ def sendCommand(command_str) :
     #print(ser.readline(), end="") # OKが来るはず（チェック無し）
     logger.info(str(ser.readline()))
     logger.info(str(ser.readline()))
-    logger.info(str(ser.readline()))
+    
+    chk_ok = "none"
+    while not chk_ok.startswith("OK") :
+        chk_ok = str(ser.readline().decode('utf-8'))
+        logger.info(chk_ok)
+
     line = str(ser.readline().decode('utf-8'))         # ERXUDPが来るはず
     logger.info(line)
 
