@@ -15,7 +15,7 @@ import logging.handlers
 import datetime
 import locale
 import urllib.request
-import pytz
+
 
 
 coeff = 1
@@ -31,9 +31,8 @@ def parthE7(EDT) :
     hexPower = EDT[-8:]    # 最後の4バイト（16進数で8文字）が瞬時電力計測値
     intPower = int(hexPower, 16)
 
-    tz = pytz.timezone('Asia/Tokyo')
-    dt = datetime.datetime.now()
-    time_stamp = tz.localize(dt)
+    JST = datetime.timezone(datetime.timedelta(hours=+9), 'JST')
+    time_stamp = datetime.datetime.now(JST)
 
     body = "瞬時電力:"+str(intPower)+"[W]"
     body = body + "(" +time_stamp.strftime("%H:%M:%S") + ")"
