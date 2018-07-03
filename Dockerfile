@@ -49,7 +49,7 @@ RUN pip3 install virtualenv \
 				ipython \
 				flake8 \
                 pyserial \
-                pytz
+                retry
 
 # ユーザ作成
 RUN groupadd web
