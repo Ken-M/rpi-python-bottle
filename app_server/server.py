@@ -24,7 +24,7 @@ from retry import retry
 # password : MYSQL_PASSWORD
 # database : MYSQL_DATABASE
 @retry()
-def connect_to_db
+def connect_to_db() :
     instantaneous_connector = mysql.connector.connect (
                 user     = 'bottle',
                 password = 'bottle',
