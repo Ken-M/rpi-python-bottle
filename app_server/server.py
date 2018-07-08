@@ -8,7 +8,6 @@ from bottle import route, run, request
 import mysql.connector
 import urllib.parse
 import datetime
-import pytz
 import logging
 import logging.handlers
 
