@@ -16,10 +16,17 @@ import datetime
 import locale
 import urllib.request
 
+from retry import retry
+
 
 
 coeff = 1
 unit = 0.1
+
+@retry (tries=4, delay=5)
+def get_url(url_string)
+    response = urllib.request.urlopen(url_string)
+    return response
 
 def writeFile(filename,msg) :
     f = open(filename,'w')
@@ -40,7 +47,7 @@ def parthE7(EDT) :
     logger.info(body)
     logger.info(url_str)
 
-    response = urllib.request.urlopen(url_str)
+    response = get_url(url_str)
     data = response.read()
     
     print ( "サーバレスポンス : ", data )	
@@ -71,7 +78,7 @@ def parthEA(EDT) :
     logger.info(body)
     logger.info(url_str2)
 
-    response2 = urllib.request.urlopen(url_str2)
+    response2 = get_url(url_str2)
     data2 = response2.read()
 
     print ( "サーバレスポンス : ", data2 )	

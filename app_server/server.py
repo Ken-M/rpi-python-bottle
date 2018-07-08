@@ -12,6 +12,8 @@ import pytz
 import logging
 import logging.handlers
 
+from retry import retry
+
 # 補足
 # 本当はテンプレートを入れるとHTMLが綺麗になります。
 # その辺は後日…
@@ -21,19 +23,24 @@ import logging.handlers
 # user     : MYSQL_USER
 # password : MYSQL_PASSWORD
 # database : MYSQL_DATABASE
-instantaneous_connector = mysql.connector.connect (
-            user     = 'bottle',
-            password = 'bottle',
-            host     = '172.19.0.3',
-            database = 'instantaneous_measurement'
-)
+@retry()
+def connect_to_db
+    instantaneous_connector = mysql.connector.connect (
+                user     = 'bottle',
+                password = 'bottle',
+                host     = '172.19.0.3',
+                database = 'instantaneous_measurement'
+    )
 
-integrated_connector = mysql.connector.connect (
-            user     = 'bottle',
-            password = 'bottle',
-            host     = '172.19.0.3',
-            database = 'integrated_measurement'
-)
+    integrated_connector = mysql.connector.connect (
+                user     = 'bottle',
+                password = 'bottle',
+                host     = '172.19.0.3',
+                database = 'integrated_measurement'
+    )
+
+
+connect_to_db()
 
 logger = logging.getLogger('Logging')
 logname = "/var/log/tools/bottle_server.log"
