@@ -49,7 +49,8 @@ RUN pip3 install virtualenv \
 				ipython \
 				flake8 \
                 pyserial \
-                retry
+                retry \
+                jpholiday
 
 # ユーザ作成
 RUN groupadd web

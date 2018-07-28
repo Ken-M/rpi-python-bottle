@@ -25,11 +25,13 @@ from retry import retry
 
 instantaneous_connector = mysql.connector.cursor
 integrated_connector = mysql.connector.cursor
+temperature_connector = mysql.connector.cursor
 
 @retry()
 def connect_to_db() :
     global instantaneous_connector
     global integrated_connector
+    global temperature_connector
     instantaneous_connector = mysql.connector.connect (
                 user     = 'bottle',
                 password = 'bottle',
@@ -44,6 +46,13 @@ def connect_to_db() :
                 database = 'integrated_measurement'
     )
 
+    temperature_connector = mysql.connector.connect (
+                user     = 'bottle',
+                password = 'bottle',
+                host     = '172.19.0.3',
+                database = 'temperature'
+    )
+
 
 connect_to_db()
 
@@ -54,8 +63,13 @@ logging.basicConfig(level=10, format=fmt)
 			
 @route('/instantaneous_list')
 def instantaneous_list():
+    request_number = request.query.num or 100
     cursor = instantaneous_connector.cursor()
-    cursor.execute("select `id`, `power`, `created_at` from instantaneous_value")
+
+    if request.query.date :
+        cursor.execute("select `id`, `power`, `created_at` from instantaneous_value WHERE created_at<='" + urllib.parse.unquote(request.query.date)+"' order by created_at limit " + str(request_number))
+    else:
+        cursor.execute("select `id`, `power`, `created_at` from instantaneous_value order by created_at limit " + str(request_number))
 
     disp  = "<table>"
     # ヘッダー
@@ -73,8 +87,15 @@ def instantaneous_list():
     
 @route('/integrated_list')
 def integratd_list():
+    request_number = request.query.num or 100
+
     cursor = integrated_connector.cursor()
-    cursor.execute("select `integrated_power`, `power_delta`, `created_at` from integrated_value")
+
+    if request.query.date :
+        cursor.execute("select `integrated_power`, `power_delta`, `created_at` from integrated_value WHERE created_at<='" + urllib.parse.unquote(request.query.date)+"' order by created_at limit " + str(request_number))
+    else:
+        cursor.execute("select `integrated_power`, `power_delta`, `created_at` from integrated_value order by created_at limit " + str(request_number))
+
 
     disp  = "<table>"
     # ヘッダー
@@ -89,6 +110,33 @@ def integratd_list():
     cursor.close
 
     return "DBから取得 "+disp
+
+@route('/temperature_list')
+def temperature_list():
+    request_number = request.query.num or 100
+    cursor = temperature_connector.cursor()
+
+    if request.query.date :
+        cursor.execute("select `id`, `temperature`, `created_at` from temperature_value WHERE created_at<='" + urllib.parse.unquote(request.query.date)+"' order by created_at limit " + str(request_number))
+    else:
+        cursor.execute("select `id`, `temperature`, `created_at` from temperature_value order by created_at limit " + str(request_number))
+
+    disp  = "<table>"
+    # ヘッダー
+    disp += "<tr><th>ID</th><th>温度(℃)</th><th>登録日</th></tr>"
+    
+    # 一覧部分
+    for row in cursor.fetchall():
+        disp += "<tr><td>" + str(row[0]) + "</td><td>" + str(row[1]) + "</td><td>" + str(row[2]) + "</td></tr>"
+    
+    disp += "</table>"
+    
+    cursor.close
+
+    return "DBから取得 "+disp
+
+
+
 
 @route('/input_instantaneous')
 def input_instantaneous_power():
@@ -106,7 +154,24 @@ def input_instantaneous_power():
     cursor.close
 
     return "OK"
-    
+
+
+@route('/input_temperature')
+def input_temperature():
+    logger.info(request.query)
+
+    date_str = urllib.parse.unquote(request.query.date)
+
+    # 瞬時値を入力
+    cursor = temperature_connector.cursor()
+    cursor.execute("INSERT INTO `temperature_value` (`server_id`, `temperature`, `created_at`, `created_user`, `updated_at`, `updated_user`) VALUES (" + request.query.server_id + ", " + request.query.temperature + ", '" + date_str + "', " + request.query.user_id + ", '" + date_str + "', " + request.query.user_id + ")")
+
+    # コミット
+    temperature_connector.commit()
+
+    cursor.close
+
+    return "OK"
     
 @route('/input_integrated')
 def input_integrated_power():
@@ -153,6 +218,7 @@ def input_integrated_power():
 # コネクターをクローズ
 integrated_connector.close
 instantaneous_connector.close
+temperature_connector.close
 
 # サーバ起動
 run(host='0.0.0.0', port=8080, debug=True, reloader=True)

@@ -23,7 +23,7 @@ from retry import retry
 coeff = 1
 unit = 0.1
 
-@retry (tries=4, delay=5)
+@retry (tries=10, delay=5)
 def get_url(url_string) :
     response = urllib.request.urlopen(url_string)
     return response
