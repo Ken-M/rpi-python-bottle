@@ -53,11 +53,11 @@ def isHoliday(check_date):
 
 
 def get_price_unit(check_date):
-    logger.info("check_date:"+check_date)
-    logger.info("check_date.date:"+check_date.date)
-    logger.info("check_date.time:"+check_date.time)
+    logger.info(check_date)
+    logger.info(check_date.date)
+    logger.info(check_date.time)
     check_time = check_date.time - datetime.timedelta(minutes=10)
-    logger.info("check_time:"+check_time)
+    logger.info(check_time)
 
     if( (22 <= check_time.hour) or (check_time.hour <= 8) ) :
         return 17.65
@@ -257,6 +257,7 @@ def input_integrated_power():
         logger.info("delta:"+str(_30min_power))
 
     unit_price = get_price_unit(d)
+    logger.info(unit_price)
     charge = _30min_power * unit_price
 
     cursor = integrated_connector.cursor()  
