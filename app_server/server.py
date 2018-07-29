@@ -53,7 +53,11 @@ def isHoliday(check_date):
 
 
 def get_price_unit(check_date):
+    logger.info("check_date:"+check_date)
+    logger.info("check_date.date:"+check_date.date)
+    logger.info("check_date.time:"+check_date.time)
     check_time = check_date.time - datetime.timedelta(minutes=10)
+    logger.info("check_time:"+check_time)
 
     if( (22 <= check_time.hour) or (check_time.hour <= 8) ) :
         return 17.65
@@ -137,17 +141,17 @@ def integratd_list():
     cursor = integrated_connector.cursor()
 
     if request.query.date :
-        cursor.execute("select `integrated_power`, `power_delta`, `created_at` from integrated_value WHERE created_at<='" + urllib.parse.unquote(request.query.date)+"' order by created_at DESC limit " + str(request_number))
+        cursor.execute("select `integrated_power`, `power_delta`,`power_charge`, `created_at` from integrated_value WHERE created_at<='" + urllib.parse.unquote(request.query.date)+"' order by created_at DESC limit " + str(request_number))
     else:
-        cursor.execute("select `integrated_power`, `power_delta`, `created_at` from integrated_value order by created_at DESC limit " + str(request_number))
+        cursor.execute("select `integrated_power`, `power_delta`,`power_charge`, `created_at` from integrated_value order by created_at DESC limit " + str(request_number))
 
     disp  = "<table>"
     # ヘッダー
-    disp += "<tr><th>積算電力(kWh)</th><th>差分(kwH)</th><th>計測日</th></tr>"
+    disp += "<tr><th>積算電力(kWh)</th><th>差分(kwH)</th><th>料金(yen)</th><th>計測日</th></tr>"
     
     # 一覧部分
     for row in cursor.fetchall():
-        disp += "<tr><td>" + str(row[0]) + "</td><td>" + str(row[1]) + "</td><td>" + str(row[2]) + "</td><td>"
+        disp += "<tr><td>" + str(row[0]) + "</td><td>" + str(row[1]) + "</td><td>" + str(row[2]) + "</td><td>" + str(row[3]) +"</td></tr>"
     
     disp += "</table>"
     
