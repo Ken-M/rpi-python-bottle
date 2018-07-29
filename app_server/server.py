@@ -31,23 +31,23 @@ temperature_connector = mysql.connector.cursor
 
 
 def isHoliday(check_date):
-    if(check_date.date.weekday >= 5) :
+    if(check_date.weekday >= 5) :
         return True
-    if( jpholiday.isHoliday(check_date.date) ) :
+    if( jpholiday.isHoliday(check_date) ) :
         return True
-    if( (check_date.date.month == 1) and (check_date.date.day == 2) ):
+    if( (check_date.month == 1) and (check_date.day == 2) ):
         return True
-    if( (check_date.date.month == 1) and (check_date.date.day == 3) ):
+    if( (check_date.month == 1) and (check_date.day == 3) ):
         return True       
-    if( (check_date.date.month == 4) and (check_date.date.day == 30) ):
+    if( (check_date.month == 4) and (check_date.day == 30) ):
         return True
-    if( (check_date.date.month == 5) and (check_date.date.day == 1) ):
+    if( (check_date.month == 5) and (check_date.day == 1) ):
         return True
-    if( (check_date.date.month == 5) and (check_date.date.day == 2) ):
+    if( (check_date.month == 5) and (check_date.day == 2) ):
         return True
-    if( (check_date.date.month == 12) and (check_date.date.day == 30) ):
+    if( (check_date.month == 12) and (check_date.day == 30) ):
         return True
-    if( (check_date.date.month == 12) and (check_date.date.day == 31) ):
+    if( (check_date.month == 12) and (check_date.day == 31) ):
         return True
     return False
 
@@ -57,11 +57,11 @@ def get_price_unit(check_date):
     check_time = check_date - datetime.timedelta(minutes=10)
     logger.info(check_time)
 
-    if( (22 <= check_time.time.hour) or (check_time.time.hour <= 8) ) :
+    if( (22 <= check_time.hour) or (check_time.hour <= 8) ) :
         return 17.65
 
     if( isHoliday(check_date) == False ) :
-        if((9<= check_time.time.hour) or (check_time.time.hour <= 18)) :
+        if((9<= check_time.hour) or (check_time.hour <= 18)) :
             return 32.45
 
     return 25.62
