@@ -54,16 +54,14 @@ def isHoliday(check_date):
 
 def get_price_unit(check_date):
     logger.info(check_date)
-    logger.info(check_date.date)
-    logger.info(check_date.time)
-    check_time = check_date.time - datetime.timedelta(minutes=10)
+    check_time = check_date - datetime.timedelta(minutes=10)
     logger.info(check_time)
 
-    if( (22 <= check_time.hour) or (check_time.hour <= 8) ) :
+    if( (22 <= check_time.time.hour) or (check_time.time.hour <= 8) ) :
         return 17.65
 
     if( isHoliday(check_date) == False ) :
-        if((9<= check_time.hour) or (check_time.hour <= 18)) :
+        if((9<= check_time.time.hour) or (check_time.time.hour <= 18)) :
             return 32.45
 
     return 25.62
