@@ -10,6 +10,7 @@ import urllib.parse
 import datetime
 import logging
 import logging.handlers
+import jpholiday
 
 from retry import retry
 
@@ -26,6 +27,46 @@ from retry import retry
 instantaneous_connector = mysql.connector.cursor
 integrated_connector = mysql.connector.cursor
 temperature_connector = mysql.connector.cursor
+
+
+
+def isHoliday(check_date):
+    if(check_date.date.weekday >= 5) :
+        return True
+    if( jpholiday.isHoliday(check_date.date) ) :
+        return True
+    if( (check_date.date.month == 1) and (check_date.date.day == 2) ):
+        return True
+    if( (check_date.date.month == 1) and (check_date.date.day == 3) ):
+        return True       
+    if( (check_date.date.month == 4) and (check_date.date.day == 30) ):
+        return True
+    if( (check_date.date.month == 5) and (check_date.date.day == 1) ):
+        return True
+    if( (check_date.date.month == 5) and (check_date.date.day == 2) ):
+        return True
+    if( (check_date.date.month == 12) and (check_date.date.day == 30) ):
+        return True
+    if( (check_date.date.month == 12) and (check_date.date.day == 31) ):
+        return True
+    return False
+
+
+def get_price_unit(check_date):
+    check_time = check_date.time - datetime.timedelta(minutes=10)
+
+    if( (22 <= check_time.hour) or (check_time.hour <= 8) ) :
+        return 17.65
+
+    if( isHoliday(check_date) == False ) :
+        if((9<= check_time.hour) or (check_time.hour <= 18)) :
+            return 32.45
+
+    return 25.62
+
+  
+
+
 
 @retry()
 def connect_to_db() :
@@ -60,16 +101,18 @@ logger = logging.getLogger('Logging')
 logname = "/var/log/tools/bottle_server.log"
 fmt = "%(asctime)s %(levelname)s %(name)s :%(message)s"
 logging.basicConfig(level=10, format=fmt)
-			
+
+
+
 @route('/instantaneous_list')
 def instantaneous_list():
     request_number = request.query.num or 100
     cursor = instantaneous_connector.cursor()
 
     if request.query.date :
-        cursor.execute("select `id`, `power`, `created_at` from instantaneous_value WHERE created_at<='" + urllib.parse.unquote(request.query.date)+"' order by created_at limit " + str(request_number))
+        cursor.execute("select `id`, `power`, `created_at` from instantaneous_value WHERE created_at<='" + urllib.parse.unquote(request.query.date)+"' order by created_at DESC limit " + str(request_number))
     else:
-        cursor.execute("select `id`, `power`, `created_at` from instantaneous_value order by created_at limit " + str(request_number))
+        cursor.execute("select `id`, `power`, `created_at` from instantaneous_value order by created_at DESC limit " + str(request_number))
 
     disp  = "<table>"
     # ヘッダー
@@ -85,6 +128,8 @@ def instantaneous_list():
 
     return "DBから取得 "+disp
     
+
+
 @route('/integrated_list')
 def integratd_list():
     request_number = request.query.num or 100
@@ -92,10 +137,9 @@ def integratd_list():
     cursor = integrated_connector.cursor()
 
     if request.query.date :
-        cursor.execute("select `integrated_power`, `power_delta`, `created_at` from integrated_value WHERE created_at<='" + urllib.parse.unquote(request.query.date)+"' order by created_at limit " + str(request_number))
+        cursor.execute("select `integrated_power`, `power_delta`, `created_at` from integrated_value WHERE created_at<='" + urllib.parse.unquote(request.query.date)+"' order by created_at DESC limit " + str(request_number))
     else:
-        cursor.execute("select `integrated_power`, `power_delta`, `created_at` from integrated_value order by created_at limit " + str(request_number))
-
+        cursor.execute("select `integrated_power`, `power_delta`, `created_at` from integrated_value order by created_at DESC limit " + str(request_number))
 
     disp  = "<table>"
     # ヘッダー
@@ -111,15 +155,17 @@ def integratd_list():
 
     return "DBから取得 "+disp
 
+
+
 @route('/temperature_list')
 def temperature_list():
     request_number = request.query.num or 100
     cursor = temperature_connector.cursor()
 
     if request.query.date :
-        cursor.execute("select `id`, `temperature`, `created_at` from temperature_value WHERE created_at<='" + urllib.parse.unquote(request.query.date)+"' order by created_at limit " + str(request_number))
+        cursor.execute("select `id`, `temperature`, `created_at` from temperature_value WHERE created_at<='" + urllib.parse.unquote(request.query.date)+"' order by created_at DESC limit " + str(request_number))
     else:
-        cursor.execute("select `id`, `temperature`, `created_at` from temperature_value order by created_at limit " + str(request_number))
+        cursor.execute("select `id`, `temperature`, `created_at` from temperature_value order by created_at DESC limit " + str(request_number))
 
     disp  = "<table>"
     # ヘッダー
@@ -173,6 +219,8 @@ def input_temperature():
 
     return "OK"
     
+
+
 @route('/input_integrated')
 def input_integrated_power():
     logger.info(request.query)
@@ -204,8 +252,11 @@ def input_integrated_power():
         _30min_power = float(request.query.integrated_power) - float(record[0])
         logger.info("delta:"+str(_30min_power))
 
+    unit_price = get_price_unit(d)
+    charge = _30min_power * unit_price
+
     cursor = integrated_connector.cursor()  
-    cursor.execute("INSERT INTO `integrated_value` (`server_id`, `integrated_power`, `power_delta`, `power_charge`, `created_at`, `created_user`, `updated_at`, `updated_user`) VALUES (" + request.query.server_id + ", " + request.query.integrated_power + ", " + str(_30min_power) + ", 0,'" + date_str + "'," + request.query.user_id + ", NOW(), " + request.query.user_id + ") on duplicate key update created_at='" + date_str + "', updated_at=NOW()")
+    cursor.execute("INSERT INTO `integrated_value` (`server_id`, `integrated_power`, `power_delta`, `power_charge`, `created_at`, `created_user`, `updated_at`, `updated_user`) VALUES (" + request.query.server_id + ", " + request.query.integrated_power + ", " + str(_30min_power) + ", " + str(charge)+ ",'" + date_str + "'," + request.query.user_id + ", NOW(), " + request.query.user_id + ") on duplicate key update created_at='" + date_str + "', updated_at=NOW()")
 
     # コミット
     integrated_connector.commit()   
