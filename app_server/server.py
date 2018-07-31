@@ -78,7 +78,7 @@ class DB:
         try:
             cursor = self.conn.cursor()
             cursor.execute(sql)
-        except (AttributeError, mysql.OperationalError):
+        except (AttributeError, mysql.connector.errors.OperationalError):
             self.connect()
             cursor = self.conn.cursor()
             cursor.execute(sql)
