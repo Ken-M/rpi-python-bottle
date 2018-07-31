@@ -118,8 +118,7 @@ logging.basicConfig(level=10, format=fmt)
 @route('/instantaneous_list')
 def instantaneous_list():
     request_number = request.query.num or 100
-    cursor = mysql.connector.cursor()
-
+ 
     if request.query.date :
         cursor = instantaneous_db.query("select `id`, `power`, `created_at` from instantaneous_value WHERE created_at<='" + urllib.parse.unquote(request.query.date)+"' order by created_at DESC limit " + str(request_number))
     else:
@@ -145,8 +144,6 @@ def instantaneous_list():
 def integratd_list():
     request_number = request.query.num or 100
 
-    cursor = mysql.connector.cursor()
-
     if request.query.date :
         cursor = integrated_db.query("select `integrated_power`, `power_delta`,`power_charge`, `created_at` from integrated_value WHERE created_at<='" + urllib.parse.unquote(request.query.date)+"' order by created_at DESC limit " + str(request_number))
     else:
@@ -171,8 +168,7 @@ def integratd_list():
 @route('/temperature_list')
 def temperature_list():
     request_number = request.query.num or 100
-    cursor = mysql.connector.cursor()
-
+ 
     if request.query.date :
         cursor = temperature_db.query("select `id`, `temperature`, `created_at` from temperature_value WHERE created_at<='" + urllib.parse.unquote(request.query.date)+"' order by created_at DESC limit " + str(request_number))
     else:
