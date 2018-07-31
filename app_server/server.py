@@ -18,11 +18,11 @@ from retry import retry
 def isHoliday(check_date):
     logger.info(check_date)
     logger.info(check_date.weekday)
-    logger.info(jpholiday.isHoliday(check_date))
+    logger.info(jpholiday.is_holiday(check_date))
 
     if(check_date.weekday >= 5) :
         return True
-    if( jpholiday.isHoliday(check_date) == True) :
+    if( jpholiday.is_holiday(check_date) == True) :
         return True
     if( (check_date.month == 1) and (check_date.day == 2) ):
         return True
