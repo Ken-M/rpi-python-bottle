@@ -14,21 +14,6 @@ import jpholiday
 
 from retry import retry
 
-# 補足
-# 本当はテンプレートを入れるとHTMLが綺麗になります。
-# その辺は後日…
-
-# hostのIPアドレスは、$ docker inspect {データベースのコンテナ名}で調べる
-# MySQLのユーザやパスワード、データベースはdocker-compose.ymlで設定したもの
-# user     : MYSQL_USER
-# password : MYSQL_PASSWORD
-# database : MYSQL_DATABASE
-
-instantaneous_connector = mysql.connector.cursor
-integrated_connector = mysql.connector.cursor
-temperature_connector = mysql.connector.cursor
-
-
 
 def isHoliday(check_date):
     if(check_date.weekday >= 5) :
@@ -66,35 +51,59 @@ def get_price_unit(check_date):
 
     return 25.62
 
-  
+
+class DB:
+    conn = None
+    user = None
+    password = None
+    host = None
+    database = None
+
+    def __init__(self,user,password,host,database):
+        self.user = user
+        self.password = password
+        self.host = host
+        self.database = database
+
+    @retry()
+    def connect(self):
+        self.conn = mysql.connector.connect (
+                user     = self.user,
+                password = self.password,
+                host     = self.host,
+                database = self.database
+        )
+
+    def query(self, sql):
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute(sql)
+        except (AttributeError, mysql.OperationalError):
+            self.connect()
+            cursor = self.conn.cursor()
+            cursor.execute(sql)
+        return cursor
+
+    def commit(self):
+        self.conn.commit()
+
+    def close(self):
+        self.conn.close()
 
 
-
-@retry()
 def connect_to_db() :
-    global instantaneous_connector
-    global integrated_connector
-    global temperature_connector
-    instantaneous_connector = mysql.connector.connect (
-                user     = 'bottle',
-                password = 'bottle',
-                host     = '172.19.0.3',
-                database = 'instantaneous_measurement'
-    )
+    global instantaneous_db
+    global integrated_db
+    global temperature_db
 
-    integrated_connector = mysql.connector.connect (
-                user     = 'bottle',
-                password = 'bottle',
-                host     = '172.19.0.3',
-                database = 'integrated_measurement'
-    )
+    instantaneous_db = DB('bottle', 'bottle', '172.19.0.3','instantaneous_measurement')
+    integrated_db = DB('bottle', 'bottle', '172.19.0.3','integrated_measurement')
+    temperature_db = DB('bottle', 'bottle', '172.19.0.3','temperature')
 
-    temperature_connector = mysql.connector.connect (
-                user     = 'bottle',
-                password = 'bottle',
-                host     = '172.19.0.3',
-                database = 'temperature'
-    )
+    instantaneous_db.connect()
+    integrated_db.connect()
+    temperature_db.connect()
+
 
 
 connect_to_db()
@@ -109,12 +118,12 @@ logging.basicConfig(level=10, format=fmt)
 @route('/instantaneous_list')
 def instantaneous_list():
     request_number = request.query.num or 100
-    cursor = instantaneous_connector.cursor()
+    cursor = mysql.connector.cursor()
 
     if request.query.date :
-        cursor.execute("select `id`, `power`, `created_at` from instantaneous_value WHERE created_at<='" + urllib.parse.unquote(request.query.date)+"' order by created_at DESC limit " + str(request_number))
+        cursor = instantaneous_db.query("select `id`, `power`, `created_at` from instantaneous_value WHERE created_at<='" + urllib.parse.unquote(request.query.date)+"' order by created_at DESC limit " + str(request_number))
     else:
-        cursor.execute("select `id`, `power`, `created_at` from instantaneous_value order by created_at DESC limit " + str(request_number))
+        cursor = instantaneous_db.query("select `id`, `power`, `created_at` from instantaneous_value order by created_at DESC limit " + str(request_number))
 
     disp  = "<table>"
     # ヘッダー
@@ -136,12 +145,12 @@ def instantaneous_list():
 def integratd_list():
     request_number = request.query.num or 100
 
-    cursor = integrated_connector.cursor()
+    cursor = mysql.connector.cursor()
 
     if request.query.date :
-        cursor.execute("select `integrated_power`, `power_delta`,`power_charge`, `created_at` from integrated_value WHERE created_at<='" + urllib.parse.unquote(request.query.date)+"' order by created_at DESC limit " + str(request_number))
+        cursor = integrated_db.query("select `integrated_power`, `power_delta`,`power_charge`, `created_at` from integrated_value WHERE created_at<='" + urllib.parse.unquote(request.query.date)+"' order by created_at DESC limit " + str(request_number))
     else:
-        cursor.execute("select `integrated_power`, `power_delta`,`power_charge`, `created_at` from integrated_value order by created_at DESC limit " + str(request_number))
+        cursor = integrated_db.query("select `integrated_power`, `power_delta`,`power_charge`, `created_at` from integrated_value order by created_at DESC limit " + str(request_number))
 
     disp  = "<table>"
     # ヘッダー
@@ -162,12 +171,12 @@ def integratd_list():
 @route('/temperature_list')
 def temperature_list():
     request_number = request.query.num or 100
-    cursor = temperature_connector.cursor()
+    cursor = mysql.connector.cursor()
 
     if request.query.date :
-        cursor.execute("select `id`, `temperature`, `created_at` from temperature_value WHERE created_at<='" + urllib.parse.unquote(request.query.date)+"' order by created_at DESC limit " + str(request_number))
+        cursor = temperature_db.query("select `id`, `temperature`, `created_at` from temperature_value WHERE created_at<='" + urllib.parse.unquote(request.query.date)+"' order by created_at DESC limit " + str(request_number))
     else:
-        cursor.execute("select `id`, `temperature`, `created_at` from temperature_value order by created_at DESC limit " + str(request_number))
+        cursor = temperature_db.query("select `id`, `temperature`, `created_at` from temperature_value order by created_at DESC limit " + str(request_number))
 
     disp  = "<table>"
     # ヘッダー
@@ -193,11 +202,10 @@ def input_instantaneous_power():
     date_str = urllib.parse.unquote(request.query.date)
 
     # 瞬時値を入力
-    cursor = instantaneous_connector.cursor()
-    cursor.execute("INSERT INTO `instantaneous_value` (`server_id`, `power`, `created_at`, `created_user`, `updated_at`, `updated_user`) VALUES (" + request.query.server_id + ", " + request.query.power + ", '" + date_str + "', " + request.query.user_id + ", '" + date_str + "', " + request.query.user_id + ")")
+    cursor = instantaneous_db.query("INSERT INTO `instantaneous_value` (`server_id`, `power`, `created_at`, `created_user`, `updated_at`, `updated_user`) VALUES (" + request.query.server_id + ", " + request.query.power + ", '" + date_str + "', " + request.query.user_id + ", '" + date_str + "', " + request.query.user_id + ")")
 
     # コミット
-    instantaneous_connector.commit()
+    instantaneous_db.commit()
 
     cursor.close
 
@@ -211,11 +219,10 @@ def input_temperature():
     date_str = urllib.parse.unquote(request.query.date)
 
     # 瞬時値を入力
-    cursor = temperature_connector.cursor()
-    cursor.execute("INSERT INTO `temperature_value` (`server_id`, `temperature`, `created_at`, `created_user`, `updated_at`, `updated_user`) VALUES (" + request.query.server_id + ", " + request.query.temperature + ", '" + date_str + "', " + request.query.user_id + ", '" + date_str + "', " + request.query.user_id + ")")
+    cursor = temperature_db.query("INSERT INTO `temperature_value` (`server_id`, `temperature`, `created_at`, `created_user`, `updated_at`, `updated_user`) VALUES (" + request.query.server_id + ", " + request.query.temperature + ", '" + date_str + "', " + request.query.user_id + ", '" + date_str + "', " + request.query.user_id + ")")
 
     # コミット
-    temperature_connector.commit()
+    temperature_db.commit()
 
     cursor.close
 
@@ -226,9 +233,8 @@ def input_temperature():
 @route('/input_integrated')
 def input_integrated_power():
     logger.info(request.query)
-    # 積算値を入力
-    cursor = integrated_connector.cursor()
-    
+
+    # 積算値を入力   
     date_str = urllib.parse.unquote(request.query.date)
     d = datetime.datetime.strptime(date_str, "%Y/%m/%d %H:%M:%S")
     logger.info(date_str)
@@ -240,7 +246,7 @@ def input_integrated_power():
     logger.info(_30min_before_str)
 
     # 30分前の積算値を取得
-    cursor.execute("SELECT `integrated_power`, `created_at` from integrated_value WHERE created_at='" + _30min_before_str+"'")
+    cursor = integrated_db.query("SELECT `integrated_power`, `created_at` from integrated_value WHERE created_at='" + _30min_before_str+"'")
     
     _30min_power = float(0.0)
     
@@ -258,11 +264,10 @@ def input_integrated_power():
     logger.info(unit_price)
     charge = _30min_power * unit_price
 
-    cursor = integrated_connector.cursor()  
-    cursor.execute("INSERT INTO `integrated_value` (`server_id`, `integrated_power`, `power_delta`, `power_charge`, `created_at`, `created_user`, `updated_at`, `updated_user`) VALUES (" + request.query.server_id + ", " + request.query.integrated_power + ", " + str(_30min_power) + ", " + str(charge)+ ",'" + date_str + "'," + request.query.user_id + ", NOW(), " + request.query.user_id + ") on duplicate key update created_at='" + date_str + "', updated_at=NOW()")
+    cursor = integrated_db.query("INSERT INTO `integrated_value` (`server_id`, `integrated_power`, `power_delta`, `power_charge`, `created_at`, `created_user`, `updated_at`, `updated_user`) VALUES (" + request.query.server_id + ", " + request.query.integrated_power + ", " + str(_30min_power) + ", " + str(charge)+ ",'" + date_str + "'," + request.query.user_id + ", NOW(), " + request.query.user_id + ") on duplicate key update created_at='" + date_str + "', updated_at=NOW()")
 
     # コミット
-    integrated_connector.commit()   
+    integrated_db.commit()   
 
     cursor.close
 
@@ -270,9 +275,8 @@ def input_integrated_power():
     
 
 # コネクターをクローズ
-integrated_connector.close
-instantaneous_connector.close
-temperature_connector.close
-
+instantaneous_db.close()
+integrated_db.close()
+temperature_db.close()
 # サーバ起動
 run(host='0.0.0.0', port=8080, debug=True, reloader=True)
