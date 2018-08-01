@@ -48,7 +48,7 @@ def get_price_unit(check_date):
         return 17.65
 
     if( isHoliday(check_time) == False ) :
-        if((9<= check_time.hour) or (check_time.hour <= 18)) :
+        if((9<= check_time.hour) and (check_time.hour <= 18)) :
             return 32.45
 
     return 25.62
