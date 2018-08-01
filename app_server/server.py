@@ -16,11 +16,7 @@ from retry import retry
 
 
 def isHoliday(check_date):
-    logger.info(check_date)
-    logger.info(check_date.weekday)
-    logger.info(jpholiday.is_holiday(check_date))
-
-    if(check_date.weekday >= 5) :
+     if(check_date.weekday() >= 5) :
         return True
     if( jpholiday.is_holiday(check_date) == True) :
         return True
@@ -45,11 +41,13 @@ def get_price_unit(check_date):
     logger.info(check_date)
     check_time = check_date - datetime.timedelta(minutes=10)
     logger.info(check_time)
-
+    logger.info(check_date.weekday())
+    logger.info(jpholiday.is_holiday(check_date))
+    
     if( (22 <= check_time.hour) or (check_time.hour <= 8) ) :
         return 17.65
 
-    if( isHoliday(check_date) == False ) :
+    if( isHoliday(check_time) == False ) :
         if((9<= check_time.hour) or (check_time.hour <= 18)) :
             return 32.45
 
