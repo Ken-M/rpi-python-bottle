@@ -35,6 +35,7 @@ import requests
 # global variables.
 _BASE_URL = 'https://cloudiotdevice.googleapis.com/v1'
 _BACKOFF_DURATION = 60
+_DATETIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 
 coeff = 1
 unit = 0.1
@@ -194,7 +195,7 @@ def parthE7(EDT) :
 
     JST = datetime.timezone(datetime.timedelta(hours=+9), 'JST')
     time_stamp = datetime.datetime.now(JST)
-    datetime_str = time_stamp.strftime("%Y/%m/%d %H:%M:%S")
+    datetime_str = time_stamp.strftime(_DATETIME_FORMAT)
 
     body = "瞬時電力:"+str(intPower)+"[W]"
     body = body + "(" + datetime_str + ")"
@@ -233,12 +234,12 @@ def parthEA(EDT) :
                           int(hexSeconds,16))    
 
     intPower = int(hexPower,16) * coeff * unit
-    timestamp_str = time_stamp.strftime("%Y/%m/%d %H:%M:%S")
+    timestamp_str = time_stamp.strftime(_DATETIME_FORMAT)
 
     body = "積算電力:"+str(intPower)+"[kWh]"
     body = body + "(" + timestamp_str + ")"
 
-    last_json_data = {"created_at":"1999/01/01 01:01:01"}
+    last_json_data = {"created_at":"1999-01-01 01:01:01"}
 
     try:
         f = open(app_path+'last_integral.json', 'r')
@@ -253,7 +254,7 @@ def parthEA(EDT) :
 
     _30min_power = float(0.0)
     _30min_before = time_stamp + datetime.timedelta(minutes=-30)
-    _30min_before_str = _30min_before.strftime("%Y/%m/%d %H:%M:%S")
+    _30min_before_str = _30min_before.strftime(_DATETIME_FORMAT)
     
     if(last_json_data["created_at"] == _30min_before_str) :
         _30min_power = float(intPower) - float(last_json_data["integrated_power"])
