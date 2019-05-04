@@ -278,7 +278,7 @@ def parthEA(EDT) :
     json_body = json.dumps(data_body)
     json_obj = json.loads(json_body)
 
-     logger.info(json_body)
+    logger.info(json_body)
 
     data = send_message("integrated_topic", json_body, jwt_token, jwt_iat)
 
