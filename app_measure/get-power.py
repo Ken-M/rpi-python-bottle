@@ -39,7 +39,7 @@ _BACKOFF_DURATION = 60
 coeff = 1
 unit = 0.1
 
-jwt_token = create_jwt()
+jwt_token = ""
 jwt_iat = datetime.datetime.utcnow()
 jwt_exp_mins = 20
 
