@@ -146,7 +146,7 @@ def send_message(data_type, message_data, jwt_token, jwt_iat):
     except:
         logger.error('Message send error')
 
-    return resp
+    return resp, jwt_iat
 
 
 def isHoliday(check_date):
@@ -201,17 +201,17 @@ def parthE7(EDT) :
     body = body + "(" + datetime_str + ")"
 
     data_body = {}
-    data_body["power"] = intPower
-    data_body["created_at"] = datetime_str
-    data_body["updated_at"] = datetime_str
-    data_body["timestamp"] = str(time_stamp.timestamp())
+    data_body["POWER"] = intPower
+    data_body["TIMESTAMP"] = str(time_stamp.timestamp())
 
     json_body = json.dumps(data_body)
    
     logger.info(body)
     logger.info(json_body)
 
+    global jwt_iat
     data = send_message("instantaneous_topic", json_body, jwt_token, jwt_iat)
+    jwt_iat = data[1]
     
     print ( "サーバレスポンス : ", data )	
     
@@ -244,52 +244,49 @@ def parthEA(EDT) :
     body = body + "(" + timestamp_str + ")"
     logger.info(body)
 
-    last_json_data = {"created_at":"1999-01-01 01:01:01"}
+    last_json_data = {"TIMESTAMP":"0"}
 
     try:
-        f = open(app_path+'last_integral.json', 'r')
-        last_json_data = json.load(f)
-        f.close()
-        logger.info("last data" + last_json_data)
-    except:
-        logger.info("first data")
+        with open(app_path+'last_integral.json', 'r') as f:
+            last_json_data = json.load(f)
+        logger.info('last data:{}'.format(last_json_data))
+    except Exception as e:
+        logger.info('first data:{}'.format(e))
 
-    if(timestamp_str == last_json_data["created_at"]) :
+    if(str(time_stamp.timestamp()) == last_json_data["TIMESTAMP"]) :
         logger.info("duplicated")
         return
 
     _30min_power = float(0.0)
     _30min_before = time_stamp + datetime.timedelta(minutes=-30)
-    _30min_before_str = _30min_before.strftime(_DATETIME_FORMAT)
     
-    if(last_json_data["created_at"] == _30min_before_str) :
-        _30min_power = float(intPower) - float(last_json_data["integrated_power"])
-        logger.info("delta:"+str(_30min_power))
+    if(last_json_data["TIMESTAMP"] == str(_30min_before.timestamp())) :
+        _30min_power = float(intPower) - float(last_json_data["INTEGRATED_POWER"])
+        logger.info("power delta:"+str(_30min_power))
 
     unit_price = get_price_unit(time_stamp)
     logger.info(unit_price)
     charge = _30min_power * unit_price[0]
 
     data_body = {}
-    data_body["integrated_power"] = intPower
-    data_body["power_delta"] = _30min_power
-    data_body["power_type"] = unit_price[1] 
-    data_body["power_charge"] = charge   
-    data_body["created_at"] = timestamp_str
-    data_body["updated_at"] = timestamp_str
-    data_body["timestamp"] = time_stamp.timestamp()
+    data_body["INTEGRATED_POWER"] = intPower
+    data_body["POWER_DELTA"] = _30min_power
+    data_body["POWER_CHARGE_TYPE"] = unit_price[1] 
+    data_body["CHARGE"] = charge   
+    data_body["TIMESTAMP"] = str(time_stamp.timestamp())
 
     json_body = json.dumps(data_body)
     json_obj = json.loads(json_body)
 
     logger.info(json_body)
-
+    
+    global jwt_iat
     data = send_message("integrated_topic", json_body, jwt_token, jwt_iat)
+    jwt_iat = data[1]
 
-    if( data.status_code == 200) :
-        fw = open(app_path+'last_integral.json','w')
-        json.dump(json_obj,fw)
-        fw.close()
+    if( data[0].status_code == 200) :
+        with open(app_path+'last_integral.json','w') as fw :
+            json.dump(json_obj,fw)
         logger.info("json file saved")
 
     print ( "サーバレスポンス : ", data )	
