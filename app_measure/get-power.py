@@ -238,6 +238,7 @@ def parthEA(EDT) :
 
     body = "積算電力:"+str(intPower)+"[kWh]"
     body = body + "(" + timestamp_str + ")"
+    logger.info(body)
 
     last_json_data = {"created_at":"1999-01-01 01:01:01"}
 
@@ -245,6 +246,7 @@ def parthEA(EDT) :
         f = open(app_path+'last_integral.json', 'r')
         last_json_data = json.load(f)
         f.close()
+        logger.info("last data" + last_json_data)
     except:
         logger.info("first data")
 
@@ -276,8 +278,7 @@ def parthEA(EDT) :
     json_body = json.dumps(data_body)
     json_obj = json.loads(json_body)
 
-    logger.info(body)
-    logger.info(json_body)
+     logger.info(json_body)
 
     data = send_message("integrated_topic", json_body, jwt_token, jwt_iat)
 
@@ -285,6 +286,7 @@ def parthEA(EDT) :
         fw = open(app_path+'last_integral.json','w')
         json.dump(json_obj,fw)
         fw.close()
+        logger.info("json file saved")
 
     print ( "サーバレスポンス : ", data )	
 
