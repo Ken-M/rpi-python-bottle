@@ -50,19 +50,20 @@ RUN pip3 install virtualenv \
 				flake8 \
                 pyserial \
                 retry \
-                jpholiday
+                jpholiday \
+                cryptography==2.5 \
+                google-api-python-client==1.7.8 \
+                google-auth-httplib2==0.0.3 \
+                google-auth==1.6.2 \
+                google-cloud-pubsub==0.39.1 \
+                pyjwt==1.7.1 \
+                requests==2.21.0
 
 # ユーザ作成
 RUN groupadd web
 RUN useradd -d /home/bottle -m bottle
 
-# MySQLドライバ"mysql-connector-python"をインストール
-# pipのを使うとエラーなので、git clone
-RUN git clone https://github.com/mysql/mysql-connector-python.git
-WORKDIR mysql-connector-python
-RUN python3 ./setup.py build
-RUN python3 ./setup.py install
-
+# ドングルからデータを読むための権限を追加
 RUN usermod -a -G tty bottle
 RUN usermod -a -G dialout bottle
 # RUN chmod 0666 /dev/ttyUSB0

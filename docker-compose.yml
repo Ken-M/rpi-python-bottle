@@ -1,53 +1,8 @@
 version: "3"
 
-volumes:
-  mysql-db:
-    driver_opts:
-      type: none
-      device: /mnt/nas/workspace/data/mysql
-      o: bind
+
       
 services:
-    mysql:
-      container_name: rpi-python-bottle-db
-      build:
-        context: .
-        dockerfile: Dockerfile-MySQL
-      volumes:
-       - ./sql:/docker-entrypoint-initdb.d
-       - mysql-db:/var/lib/mysql
-       - ./docker/mysql:/etc/mysql/conf.d:ro
-      environment:
-        MYSQL_ROOT_PASSWORD: password
-        MYSQL_USER: bottle
-        MYSQL_PASSWORD: bottle
-        MYSQL_DATABASE: instantaneous_measurement
-      expose:
-        - "3306"
-      networks:
-        app_net:
-          ipv4_address: 172.19.0.3
-
-
-    server-application:
-      container_name: rpi-python-bottle-app-server
-      build: .
-      tty: false
-      volumes:
-       - ./app_server:/home/bottle/app
-      expose:
-        - "8080"        
-      ports:
-        - "8080:8080"
-      environment:
-        CODEIGNITER_ENV: development
-      entrypoint:
-       - /usr/local/bin/python3
-       - /home/bottle/app/server.py
-      networks:
-        app_net:
-          ipv4_address: 172.19.0.4       
-        
     measure-application:
       container_name: rpi-python-bottle-app-measure
       build: .

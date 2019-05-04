@@ -2,36 +2,188 @@
 # -*- coding: utf-8 -*-
 
 # オリジナルは、@puma_46 さんが https://qiita.com/puma_46/items/1d1589583a0c6bef796c で公開しているコード
+# さらに下記を参照して変更しています.
+# https://github.com/Shuichiro-T/gijutsushoten5_hyakuyoubako/blob/master/hyakuyoubako_data_sender.py
+# https://github.com/GoogleCloudPlatform/python-docs-samples/blob/master/iot/api-client/http_example/cloudiot_http_example.py
 
 from __future__ import print_function
 from echonet import *
 from secret import *
+from gcp_environment import *
 
 import sys
 import serial
-import time
 import logging
 import logging.handlers
-import datetime
 import locale
 import urllib.request
+import urllib.parse
+import jpholiday
 
-from retry import retry
+# [START iot_http_includes]
+import base64
+import datetime
+import json
+import time
+
+from google.api_core import retry
+import jwt
+import requests
+# [END iot_http_includes]
 
 
+# global variables.
+_BASE_URL = 'https://cloudiotdevice.googleapis.com/v1'
+_BACKOFF_DURATION = 60
 
 coeff = 1
 unit = 0.1
 
-@retry (tries=30, delay=5)
-def get_url(url_string) :
-    response = urllib.request.urlopen(url_string)
-    return response
+jwt_token = create_jwt()
+jwt_iat = datetime.datetime.utcnow()
+jwt_exp_mins = 20
 
-def writeFile(filename,msg) :
-    f = open(filename,'w')
-    f.write(msg)
-    f.close()
+
+# [START iot_http_jwt]
+def create_jwt():
+    token = {
+            # The time the token was issued.
+            'iat': datetime.datetime.utcnow(),
+            # Token expiration time.
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=60),
+            # The audience field should always be set to the GCP project id.
+            'aud': project_id
+    }
+
+    # Read the private key file.
+    with open(private_key_file, 'r') as f:
+        private_key = f.read()
+
+    logger.info('Creating JWT using {} from private key file {}'.format(
+            algorithm, private_key_file))
+
+    return jwt.encode(token, private_key, algorithm=algorithm).decode('ascii')
+# [END iot_http_jwt]
+
+@retry.Retry(
+    predicate=retry.if_exception_type(AssertionError),
+    deadline=_BACKOFF_DURATION)
+# [START iot_http_publish]
+def publish_message(
+        message, data_type, jwt_token):
+    headers = {
+            'authorization': 'Bearer {}'.format(jwt_token),
+            'content-type': 'application/json',
+            'cache-control': 'no-cache'
+    }
+
+    # Publish to the events or state topic based on the flag.
+    url_suffix = 'publishEvent' if message_type == 'event' else 'setState'
+
+    publish_url = (
+        '{}/projects/{}/locations/{}/registries/{}/devices/{}:{}').format(
+            _BASE_URL, project_id, cloud_region, registry_id, device_id,
+            url_suffix)
+
+    body = None
+    msg_bytes = base64.urlsafe_b64encode(message.encode('utf-8'))
+    datatype_bytes = base64.urlsafe_b64encode(data_type.encode('utf-8'))
+    if message_type == 'event':
+        body = {'binary_data': msg_bytes.decode('ascii'), 'sub_folder': datatype_bytes.decode('ascii')}
+    else:
+        body = {
+          'state': {'binary_data': msg_bytes.decode('ascii')}
+        }
+
+    resp = requests.post(
+            publish_url, data=json.dumps(body), headers=headers)
+
+    if (resp.status_code != 200):
+        logger.warning('Response came back {}, retrying'.format(resp.status_code))
+        raise AssertionError('Not OK response: {}'.format(resp.status_code))
+
+    return resp
+# [END iot_http_publish]
+
+@retry.Retry(
+    predicate=retry.if_exception_type(AssertionError),
+    deadline=_BACKOFF_DURATION)
+# [START iot_http_getconfig]
+def get_config(
+        version, jwt_token):
+    headers = {
+            'authorization': 'Bearer {}'.format(jwt_token),
+            'content-type': 'application/json',
+            'cache-control': 'no-cache'
+    }
+
+    basepath = '{}/projects/{}/locations/{}/registries/{}/devices/{}/'
+    template = basepath + 'config?local_version={}'
+    config_url = template.format(
+        _BASE_URL, project_id, cloud_region, registry_id, device_id, version)
+
+    resp = requests.get(config_url, headers=headers)
+
+    if (resp.status_code != 200):
+        logger.warning('Error getting config: {}, retrying'.format(resp.status_code))
+        raise AssertionError('Not OK response: {}'.format(resp.status_code))
+
+    return resp
+# [END iot_http_getconfig]
+
+def send_message(data_type, message_data, jwt_token, jwt_iat):
+    seconds_since_issue = (datetime.datetime.utcnow() - jwt_iat).seconds
+
+    if seconds_since_issue > 60 * jwt_exp_mins:
+        jwt_token = create_jwt()
+        jwt_iat = datetime.datetime.utcnow()
+    
+    try: 
+        resp = publish_message(message_data, data_type, jwt_token)
+    except:
+        logger.error('Message send error')
+
+    return resp
+
+
+def isHoliday(check_date):
+    if(check_date.weekday() >= 5) :
+        return True
+    if( jpholiday.is_holiday(check_date.date()) == True) :
+        return True
+    if( (check_date.month == 1) and (check_date.day == 2) ):
+        return True
+    if( (check_date.month == 1) and (check_date.day == 3) ):
+        return True       
+    if( (check_date.month == 4) and (check_date.day == 30) ):
+        return True
+    if( (check_date.month == 5) and (check_date.day == 1) ):
+        return True
+    if( (check_date.month == 5) and (check_date.day == 2) ):
+        return True
+    if( (check_date.month == 12) and (check_date.day == 30) ):
+        return True
+    if( (check_date.month == 12) and (check_date.day == 31) ):
+        return True
+    return False
+
+
+def get_price_unit(check_date):
+    logger.info(check_date)
+    check_time = check_date - datetime.timedelta(minutes=10)
+    logger.info(check_time)
+    logger.info(check_date.weekday())
+    logger.info(jpholiday.is_holiday(check_date.date()))
+
+    if( (22 <= check_time.hour) or (check_time.hour <= 8) ) :
+        return 17.65, "night time"
+
+    if( isHoliday(check_time) == False ) :
+        if((9<= check_time.hour) and (check_time.hour <= 18)) :
+            return 32.45, "day time"
+
+    return 25.62, "life time"
+
 
 def parthE7(EDT) :
     # 内容が瞬時電力計測値(E7)だったら
@@ -40,15 +192,23 @@ def parthE7(EDT) :
 
     JST = datetime.timezone(datetime.timedelta(hours=+9), 'JST')
     time_stamp = datetime.datetime.now(JST)
+    datetime_str = time_stamp.strftime("%H:%M:%S")
 
     body = "瞬時電力:"+str(intPower)+"[W]"
-    body = body + "(" +time_stamp.strftime("%H:%M:%S") + ")"
-    url_str = 'http://172.19.0.4:8080/input_instantaneous?server_id=1&power=' + str(intPower) + '&date=' + urllib.parse.quote(time_stamp.strftime("%Y/%m/%d %H:%M:%S")) + '&user_id=1'
-    logger.info(body)
-    logger.info(url_str)
+    body = body + "(" + datetime_str + ")"
 
-    response = get_url(url_str)
-    data = response.read()
+    data_body = {}
+    data_body["power"] = intPower
+    data_body["created_at"] = datetime_str
+    data_body["updated_at"] = datetime_str
+    data_body["timestamp"] = str(time_stamp.timestamp())
+
+    json_body = json.dumps(data_body)
+   
+    logger.info(body)
+    logger.info(json_body)
+
+    data = send_message("instantaneous_topic", json_body, jwt_token, jwt_iat)
     
     print ( "サーバレスポンス : ", data )	
     
@@ -63,7 +223,7 @@ def parthEA(EDT) :
     hexSeconds = EDT[-10:-10+2]
     hexPower   = EDT[-8:]
 
-    d = datetime.datetime(int(hexYear,16),
+    time_stamp = datetime.datetime(int(hexYear,16),
                           int(hexMonth,16),
                           int(hexDay,16),
                           int(hexHour,16),
@@ -71,17 +231,59 @@ def parthEA(EDT) :
                           int(hexSeconds,16))    
 
     intPower = int(hexPower,16) * coeff * unit
+    timestamp_str = time_stamp.strftime("%Y/%m/%d %H:%M:%S")
 
     body = "積算電力:"+str(intPower)+"[kWh]"
-    body = body + "(" +d.strftime("%Y/%m/%d %H:%M:%S") + ")"
-    url_str2 = 'http://172.19.0.4:8080/input_integrated?server_id=1&integrated_power=' + str(intPower) + '&date=' + urllib.parse.quote(d.strftime("%Y/%m/%d %H:%M:%S")) + '&user_id=1'
+    body = body + "(" + timestamp_str + ")"
+
+    last_json_data = {"created_at":"1999/01/01 01:01:01"}
+
+    try:
+        f = open('last_integral.json', 'r')
+        last_json_data = json.load(f)
+        f.close()
+    except:
+        logger.info("first data")
+
+    if(timestamp_str == last_json_data["created_at"]) :
+        logger.info("duplicated")
+        return
+
+    _30min_power = float(0.0)
+    _30min_before = time_stamp + datetime.timedelta(minutes=-30)
+    _30min_before_str = _30min_before.strftime("%Y/%m/%d %H:%M:%S")
+    
+    if(last_json_data["created_at"] == _30min_before_str) :
+        _30min_power = float(intPower) - float(last_json_data["integrated_power"])
+        logger.info("delta:"+str(_30min_power))
+
+    unit_price = get_price_unit(time_stamp)
+    logger.info(unit_price)
+    charge = _30min_power * unit_price[0]
+
+    data_body = {}
+    data_body["integrated_power"] = intPower
+    data_body["power_delta"] = _30min_power
+    data_body["power_type"] = unit_price[1] 
+    data_body["power_charge"] = charge   
+    data_body["created_at"] = timestamp_str
+    data_body["updated_at"] = timestamp_str
+    data_body["timestamp"] = time_stamp.timestamp()
+
+    json_body = json.dumps(data_body)
+    json_obj = json.loads(json_body)
+
     logger.info(body)
-    logger.info(url_str2)
+    logger.info(json_body)
 
-    response2 = get_url(url_str2)
-    data2 = response2.read()
+    data = send_message("integrated_topic", json_body, jwt_token, jwt_iat)
 
-    print ( "サーバレスポンス : ", data2 )	
+    if( data.status_code == 200) :
+        fw = open('last_integral.json','w')
+        json.dump(json_obj,fw)
+        fw.close()
+
+    print ( "サーバレスポンス : ", data )	
 
 
 def parthD3(EDT) :
@@ -182,26 +384,15 @@ def sendCommand(command_str) :
                 OPC_COUNT+=1
 
 
-#ファイル出力設定
-POWER_FILE_NAME = "power.log"
-WRITE_PATH="/home/pi/p_data/"
-
 #ロガー取得
 logger = logging.getLogger('Logging')
 
 logname = "/var/log/tools/b-route.log"
 fmt = "%(asctime)s %(levelname)s %(name)s :%(message)s"
-#以下のどちらかを選んで コメントアウトしてください
-#こちらのコメントを外すとログ標準出力になります。
-#ログレベルもデバック用になります
 logging.basicConfig(level=10, format=fmt)
-#こちらのコメントを外すとログがファイル出力になります。
-#logging.basicConfig(level=30, filename=logname, format=fmt)
 
 # シリアルポートデバイス名
-#serialPortDev = 'COM3'  # Windows の場合
 serialPortDev = '/dev/ttyUSB0'  # Linux(ラズパイなど）の場合
-#serialPortDev = '/dev/cu.usbserial-A103BTPR'    # Mac の場合
 
 # シリアルポート初期化
 ser = serial.Serial(serialPortDev, 115200)
@@ -304,6 +495,12 @@ logger.info(str(ser.readline().decode('utf-8')))
 
 GetEnd = True
 counter = 30
+
+jwt_token = create_jwt()
+jwt_iat = datetime.datetime.utcnow()
+jwt_exp_mins = 20
+logger.info('Latest configuration: {}'.format(get_config('0', jwt_token).text))
+
 while True :
     sendCommand(GET_NOW_POWER)
     time.sleep(10)
