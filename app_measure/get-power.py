@@ -87,13 +87,15 @@ def publish_message(
 
     body = None
     msg_bytes = base64.urlsafe_b64encode(message.encode('utf-8'))
-    datatype_bytes = base64.urlsafe_b64encode(data_type.encode('utf-8'))
+
     if message_type == 'event':
-        body = {'binary_data': msg_bytes.decode('ascii'), 'sub_folder': datatype_bytes.decode('ascii')}
+        body = {'binary_data': msg_bytes.decode('ascii'), 'sub_folder': data_type}
     else:
         body = {
           'state': {'binary_data': msg_bytes.decode('ascii')}
         }
+
+    logger.info(body)
 
     resp = requests.post(
             publish_url, data=json.dumps(body), headers=headers)
@@ -192,7 +194,7 @@ def parthE7(EDT) :
 
     JST = datetime.timezone(datetime.timedelta(hours=+9), 'JST')
     time_stamp = datetime.datetime.now(JST)
-    datetime_str = time_stamp.strftime("%H:%M:%S")
+    datetime_str = time_stamp.strftime("%Y/%m/%d %H:%M:%S")
 
     body = "瞬時電力:"+str(intPower)+"[W]"
     body = body + "(" + datetime_str + ")"
