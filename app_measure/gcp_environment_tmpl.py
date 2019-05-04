@@ -6,3 +6,4 @@ project_id = ""
 device_id = ""
 private_key_file = ""
 cloud_region = ""
+app_path = '/home/bottle/app/'

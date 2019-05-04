@@ -239,7 +239,7 @@ def parthEA(EDT) :
     last_json_data = {"created_at":"1999/01/01 01:01:01"}
 
     try:
-        f = open('last_integral.json', 'r')
+        f = open(app_path+'last_integral.json', 'r')
         last_json_data = json.load(f)
         f.close()
     except:
@@ -279,7 +279,7 @@ def parthEA(EDT) :
     data = send_message("integrated_topic", json_body, jwt_token, jwt_iat)
 
     if( data.status_code == 200) :
-        fw = open('last_integral.json','w')
+        fw = open(app_path+'last_integral.json','w')
         json.dump(json_obj,fw)
         fw.close()
 
