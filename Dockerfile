@@ -51,13 +51,13 @@ RUN pip3 install virtualenv \
                 pyserial \
                 retry \
                 jpholiday \
-                cryptography==2.5 \
-                google-api-python-client==1.7.8 \
-                google-auth-httplib2==0.0.3 \
-                google-auth==1.6.2 \
-                google-cloud-pubsub==0.39.1 \
-                pyjwt==1.7.1 \
-                requests==2.21.0
+                cryptography \
+                google-api-python-client \
+                google-auth-httplib2 \
+                google-auth \
+                google-cloud-pubsub \
+                pyjwt \
+                requests
 
 # ユーザ作成
 RUN groupadd web
