@@ -253,16 +253,20 @@ def parthEA(EDT) :
     except Exception as e:
         logger.info('first data:{}'.format(e))
 
-    if(str(time_stamp.timestamp()) == last_json_data["TIMESTAMP"]) :
-        logger.info("duplicated")
-        return
-
     _30min_power = float(0.0)
     _30min_before = time_stamp + datetime.timedelta(minutes=-30)
-    
-    if(last_json_data["TIMESTAMP"] == str(_30min_before.timestamp())) :
-        _30min_power = float(intPower) - float(last_json_data["INTEGRATED_POWER"])
-        logger.info("power delta:"+str(_30min_power))
+
+    try:
+        if(str(time_stamp.timestamp()) == last_json_data["TIMESTAMP"]) :
+            logger.info("duplicated")
+            return
+
+        if(last_json_data["TIMESTAMP"] == str(_30min_before.timestamp())) :
+            _30min_power = float(intPower) - float(last_json_data["INTEGRATED_POWER"])
+            logger.info("power delta:"+str(_30min_power))
+
+    except Exception as e:
+        logger.info('TIMESTAMP check failed. just ignore.:{}'.format(e))
 
     unit_price = get_price_unit(time_stamp)
     logger.info(unit_price)
