@@ -26,7 +26,8 @@ RUN apt-get install -y build-essential \
                        libssl-dev \
                        openssl \
                        libbz2-dev \
-                       libreadline-dev
+                       libreadline-dev \
+                       libffi-dev
 
 # Python3をインストール
 RUN wget https://www.python.org/ftp/python/3.6.5/Python-3.6.5.tgz
