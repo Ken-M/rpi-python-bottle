@@ -35,7 +35,7 @@ import requests
 # global variables.
 _BASE_URL = 'https://cloudiotdevice.googleapis.com/v1'
 _BACKOFF_DURATION = 60
-_DATETIME_FORMAT = '%Y-%m-%d %H:%M:%S+09'
+_DATETIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 
 coeff = 1
 unit = 0.1
@@ -226,15 +226,19 @@ def parthEA(EDT) :
     hexSeconds = EDT[-10:-10+2]
     hexPower   = EDT[-8:]
 
+    JST = datetime.timezone(datetime.timedelta(hours=+9), 'JST')
     time_stamp = datetime.datetime(int(hexYear,16),
                           int(hexMonth,16),
                           int(hexDay,16),
                           int(hexHour,16),
                           int(hexMinutes,16),
-                          int(hexSeconds,16))    
+                          int(hexSeconds,16),
+                          tzinfo=JST)    
 
     intPower = int(hexPower,16) * coeff * unit
     timestamp_str = time_stamp.strftime(_DATETIME_FORMAT)
+
+    
 
     body = "積算電力:"+str(intPower)+"[kWh]"
     body = body + "(" + timestamp_str + ")"
