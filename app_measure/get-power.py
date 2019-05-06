@@ -190,6 +190,14 @@ def get_price_unit(check_date):
 
     return 25.62, "life time"
 
+def get_tempoerature():
+    url = "http://" + remo_local_addr + "/messages"
+
+    headers = {"content-type": "application/json", "X-Requested-With":"python requests"}
+    resp = requests.get(url, headers=headers)
+    data = resp.json()
+    logger.info(json.dumps(data, indent=4))
+
 
 def parthE7(EDT) :
     # 内容が瞬時電力計測値(E7)だったら
@@ -218,6 +226,8 @@ def parthE7(EDT) :
     data = send_message("instantaneous_topic", json_body, jwt_token, jwt_iat)
     jwt_token = data[1]
     jwt_iat = data[2]
+
+    get_tempoerature()
     
     logger.info( 'サーバレスポンス :{}'.format(data) )	
     

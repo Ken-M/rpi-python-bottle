@@ -7,3 +7,4 @@ device_id = ""
 private_key_file = ""
 cloud_region = ""
 app_path = '/home/bottle/app/'
+remo_local_addr = ''
