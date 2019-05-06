@@ -191,17 +191,31 @@ def get_price_unit(check_date):
     return 25.62, "life time"
 
 def get_tempoerature():
-    url = "http://" + remo_local_addr + "/messages"
-    headers = {"Content-Type": "application/json", "X-Requested-With":"python requests", "accept": "application/json", "Expect":""}
+    url = "https://api.nature.global/1/devices"
+    headers = {"Content-Type": "application/json", "X-Requested-With":"python", "accept": "application/json", "Expect":"",
+    "Authorization": 'Bearer {}'.format(remo_token)}
+
+    temp_data_body = {}
 
     try :
         resp = requests.get(url, headers=headers, timeout=3.5)
         logger.info(resp)
         if(resp.status_code == 200) :
-            data = resp.json()
-            logger.info(json.dumps(data, indent=4))
+            data_list = resp.json()
+            logger.info(json.dumps(data_list, indent=4))
+            for item in data_list :
+                mac_address = item["mac_address"]
+                label = ""
+                try :
+                    label = temp_mapping[mac_address]
+                    temp_data_body['TEMPERATURE_{}'.format(label)] = item["newest_events"]["te"]["val"]
+                except:
+                    logger.warning('{} is not in temp mapping.'.format(mac_address))
     except :
         logger.warning("temperature timeout")
+
+    logger.info(temp_data_body)
+    return temp_data_body
 
     
 
@@ -223,6 +237,9 @@ def parthE7(EDT) :
     data_body["POWER"] = intPower
     data_body["TIMESTAMP"] = str(time_stamp.timestamp())
 
+    temp_body = get_tempoerature()
+    data_body.update(temp_body)
+
     json_body = json.dumps(data_body)
    
     logger.info(body)
@@ -233,8 +250,6 @@ def parthE7(EDT) :
     data = send_message("instantaneous_topic", json_body, jwt_token, jwt_iat)
     jwt_token = data[1]
     jwt_iat = data[2]
-
-    get_tempoerature()
     
     logger.info( 'サーバレスポンス :{}'.format(data) )	
     

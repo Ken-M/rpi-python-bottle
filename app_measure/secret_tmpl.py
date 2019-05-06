@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# Bƒ‹[ƒg”FØIDi“Œ‹ž“d—Íƒpƒ[ƒOƒŠƒbƒh‚©‚ç—X‘—‚Å‘—‚ç‚ê‚Ä‚­‚éƒ„ƒcj
+# Bãƒ«ãƒ¼ãƒˆèªè¨¼IDï¼ˆæ±äº¬é›»åŠ›ãƒ‘ãƒ¯ãƒ¼ã‚°ãƒªãƒƒãƒ‰ã‹ã‚‰éƒµé€ã§é€ã‚‰ã‚Œã¦ãã‚‹ãƒ¤ãƒ„ï¼‰
 rbid  = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
-# Bƒ‹[ƒg”FØƒpƒXƒ[ƒhi“Œ‹ž“d—Íƒpƒ[ƒOƒŠƒbƒh‚©‚çƒ[ƒ‹‚Å‘—‚ç‚ê‚Ä‚­‚éƒ„ƒcj
+# Bãƒ«ãƒ¼ãƒˆèªè¨¼ãƒ‘ã‚¹ãƒ¯ãƒ¼ãƒ‰ï¼ˆæ±äº¬é›»åŠ›ãƒ‘ãƒ¯ãƒ¼ã‚°ãƒªãƒƒãƒ‰ã‹ã‚‰ãƒ¡ãƒ¼ãƒ«ã§é€ã‚‰ã‚Œã¦ãã‚‹ãƒ¤ãƒ„ï¼‰
 rbpwd = "XXXXXXXXXXXX"
+# NatureRemo token
+remo_token = ""
