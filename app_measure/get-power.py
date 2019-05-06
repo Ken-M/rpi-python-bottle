@@ -197,8 +197,9 @@ def get_tempoerature():
     try :
         resp = requests.get(url, headers=headers, timeout=3.5)
         logger.info(resp)
-        data = resp.json()
-        logger.info(json.dumps(data, indent=4))
+        if(resp.status_code == 200)
+            data = resp.json()
+            logger.info(json.dumps(data, indent=4))
     except Timeout:
         logger.warning("temperature timeout")
 
