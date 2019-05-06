@@ -200,7 +200,7 @@ def get_tempoerature():
         if(resp.status_code == 200)
             data = resp.json()
             logger.info(json.dumps(data, indent=4))
-    except Timeout:
+    except :
         logger.warning("temperature timeout")
 
     
