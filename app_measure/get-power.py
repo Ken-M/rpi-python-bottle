@@ -42,7 +42,7 @@ unit = 0.1
 
 jwt_token = ""
 jwt_iat = datetime.datetime.utcnow()
-jwt_exp_mins = 20
+jwt_exp_mins = 15
 
 
 # [START iot_http_jwt]
@@ -136,6 +136,7 @@ def get_config(
 
 def send_message(data_type, message_data, jwt_token, jwt_iat):
     seconds_since_issue = (datetime.datetime.utcnow() - jwt_iat).seconds
+    resp = requests.Response()
 
     if seconds_since_issue > 60 * jwt_exp_mins:
         jwt_token = create_jwt()
@@ -145,8 +146,10 @@ def send_message(data_type, message_data, jwt_token, jwt_iat):
         resp = publish_message(message_data, data_type, jwt_token)
     except:
         logger.error('Message send error')
+        jwt_token = create_jwt()
+        jwt_iat = datetime.datetime.utcnow()
 
-    return resp, jwt_iat
+    return resp, jwt_token, jwt_iat
 
 
 def isHoliday(check_date):
@@ -201,6 +204,7 @@ def parthE7(EDT) :
     body = body + "(" + datetime_str + ")"
 
     data_body = {}
+    data_body["TYPE"] = "INSTANTANEOUS"
     data_body["POWER"] = intPower
     data_body["TIMESTAMP"] = str(time_stamp.timestamp())
 
@@ -210,10 +214,12 @@ def parthE7(EDT) :
     logger.info(json_body)
 
     global jwt_iat
+    global jwt_token
     data = send_message("instantaneous_topic", json_body, jwt_token, jwt_iat)
-    jwt_iat = data[1]
+    jwt_token = data[1]
+    jwt_iat = data[2]
     
-    print ( "サーバレスポンス : ", data )	
+    logger.info( 'サーバレスポンス :{}'.format(data) )	
     
 
 
@@ -273,10 +279,25 @@ def parthEA(EDT) :
     charge = _30min_power * unit_price[0]
 
     data_body = {}
+    data_body["TYPE"] = "INTEGRATED"
     data_body["INTEGRATED_POWER"] = intPower
+
     data_body["POWER_DELTA"] = _30min_power
+    data_body["CHARGE"] = charge  
     data_body["POWER_CHARGE_TYPE"] = unit_price[1] 
-    data_body["CHARGE"] = charge   
+
+    if( unit_price[1] == "day time") :
+        data_body["DAYTIME_POWER_DELTA"] = _30min_power
+        data_body["DAYTIME_CHARGE"] = charge
+    elif( unit_price[1] == "life time") :
+        data_body["LIFETIME_POWER_DELTA"] = _30min_power
+        data_body["LIFETIME_CHARGE"] = charge
+    elif( unit_price[1] == "night time") :
+        data_body["NIGHTTIME_POWER_DELTA"] = _30min_power
+        data_body["NIGHTTIME_CHARGE"] = charge
+    else :
+        logger.warning("unknown charge type")
+ 
     data_body["TIMESTAMP"] = str(time_stamp.timestamp())
 
     json_body = json.dumps(data_body)
@@ -285,15 +306,17 @@ def parthEA(EDT) :
     logger.info(json_body)
     
     global jwt_iat
+    global jwt_token
     data = send_message("integrated_topic", json_body, jwt_token, jwt_iat)
-    jwt_iat = data[1]
+    jwt_token = data[1]
+    jwt_iat = data[2]
 
     if( data[0].status_code == 200) :
         with open(app_path+'last_integral.json','w') as fw :
             json.dump(json_obj,fw)
         logger.info("json file saved")
 
-    print ( "サーバレスポンス : ", data )	
+    logger.info( 'サーバレスポンス :{}'.format(data) )	
 
 
 def parthD3(EDT) :
@@ -405,7 +428,7 @@ logging.basicConfig(level=10, format=fmt)
 serialPortDev = '/dev/ttyUSB0'  # Linux(ラズパイなど）の場合
 
 # シリアルポート初期化
-ser = serial.Serial(serialPortDev, 115200)
+ser = serial.Serial(serialPortDev, 115200, timeout=10)
 
 # Bルート認証パスワード設定
 ser.write(("SKSETPWD C " + rbpwd + "\r\n").encode())
