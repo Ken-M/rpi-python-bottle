@@ -192,9 +192,14 @@ def get_price_unit(check_date):
 
 def get_tempoerature():
     url = "http://" + remo_local_addr + "/messages"
+    headers = {"Content-Type": "application/json", "X-Requested-With":"python requests", "accept": "application/json",}
 
-    headers = {"content-type": "application/json", "X-Requested-With":"python requests"}
-    resp = requests.get(url, headers=headers)
+    try :
+        resp = requests.get(url, headers=headers, timeout=3.5)
+        logger.info(resp)
+    except Timeout:
+        logger.warning("temperature timeout")
+
     data = resp.json()
     logger.info(json.dumps(data, indent=4))
 
