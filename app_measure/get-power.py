@@ -35,7 +35,8 @@ import requests
 # global variables.
 _BASE_URL = 'https://cloudiotdevice.googleapis.com/v1'
 _BACKOFF_DURATION = 60
-_DATETIME_FORMAT = '%Y-%m-%d %H:%M:%S'
+_DATETIME_FORMAT = '%Y-%m-%d %H:%M:%S %Z'
+_DATE_FORMAT = '%Y-%m-%d' 
 
 coeff = 1
 unit = 0.1
@@ -228,6 +229,7 @@ def parthE7(EDT) :
     JST = datetime.timezone(datetime.timedelta(hours=+9), 'JST')
     time_stamp = datetime.datetime.now(JST)
     datetime_str = time_stamp.strftime(_DATETIME_FORMAT)
+    date_str = time_stamp.strftime(_DATE_FORMAT)
 
     body = "瞬時電力:"+str(intPower)+"[W]"
     body = body + "(" + datetime_str + ")"
@@ -236,6 +238,9 @@ def parthE7(EDT) :
     data_body["TYPE"] = "INSTANTANEOUS"
     data_body["POWER"] = intPower
     data_body["TIMESTAMP"] = str(time_stamp.timestamp())
+    data_body["DATETIME"] = datetime_str
+    data_body["DATE"] = date_str
+
 
     temp_body = get_tempoerature()
     data_body.update(temp_body)
@@ -275,7 +280,7 @@ def parthEA(EDT) :
 
     intPower = int(hexPower,16) * coeff * unit
     timestamp_str = time_stamp.strftime(_DATETIME_FORMAT)
-
+    date_str = time_stamp.strftime(_DATE_FORMAT)
     
 
     body = "積算電力:"+str(intPower)+"[kWh]"
@@ -331,7 +336,9 @@ def parthEA(EDT) :
         logger.warning("unknown charge type")
  
     data_body["TIMESTAMP"] = str(time_stamp.timestamp())
-
+    data_body["DATETIME"] = datetime_str
+    data_body["DATE"] = date_str
+    
     json_body = json.dumps(data_body)
     json_obj = json.loads(json_body)
 
