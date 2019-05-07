@@ -35,7 +35,7 @@ import requests
 # global variables.
 _BASE_URL = 'https://cloudiotdevice.googleapis.com/v1'
 _BACKOFF_DURATION = 60
-_DATETIME_FORMAT = '%Y-%m-%d %H:%M:%S %Z'
+_DATETIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 _DATE_FORMAT = '%Y-%m-%d' 
 
 coeff = 1
