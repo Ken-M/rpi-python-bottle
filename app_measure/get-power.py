@@ -280,6 +280,7 @@ def parthEA(EDT) :
 
     intPower = int(hexPower,16) * coeff * unit
     timestamp_str = time_stamp.strftime(_DATETIME_FORMAT)
+    datetime_str = time_stamp.strftime(_DATETIME_FORMAT)
     date_str = time_stamp.strftime(_DATE_FORMAT)
     
 
@@ -338,7 +339,7 @@ def parthEA(EDT) :
     data_body["TIMESTAMP"] = str(time_stamp.timestamp())
     data_body["DATETIME"] = datetime_str
     data_body["DATE"] = date_str
-    
+
     json_body = json.dumps(data_body)
     json_obj = json.loads(json_body)
 
