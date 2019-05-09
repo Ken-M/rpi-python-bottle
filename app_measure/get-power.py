@@ -177,19 +177,19 @@ def isHoliday(check_date):
 
 def get_price_unit(check_date):
     logger.info(check_date)
-    check_time = check_date - datetime.timedelta(minutes=10)
+    check_time = check_date - datetime.timedelta(minutes=15)
     logger.info(check_time)
     logger.info(check_date.weekday())
     logger.info(jpholiday.is_holiday(check_date.date()))
 
-    if( (22 <= check_time.hour) or (check_time.hour <= 8) ) :
+    if( (datetime.time(hour=22,minute=00,second=00, tzinfo=datetime.timezone('Asia/Tokyo')) <= check_time.time) or (check_time.time < datetime.time(hour=8,minute=00,second=00, tzinfo=datetime.timezone('Asia/Tokyo'))) ) :
         return 17.65, "night time"
 
     if( isHoliday(check_time) == False ) :
-        if((9<= check_time.hour) and (check_time.hour <= 18)) :
+        if((datetime.time(hour=9,minute=00,second=00, tzinfo=datetime.timezone('Asia/Tokyo')) <= check_time.time) and (check_time.time < datetime.time(hour=18,minute=00,second=00, tzinfo=datetime.timezone('Asia/Tokyo')))) :
             return 32.45, "day time"
 
-    return 25.62, "life time"
+    return 25.62, "life time", check_time
 
 def get_tempoerature():
     url = "https://api.nature.global/1/devices"
@@ -338,6 +338,7 @@ def parthEA(EDT) :
  
     data_body["TIMESTAMP"] = str(time_stamp.timestamp())
     data_body["DATETIME"] = datetime_str
+    data_body["CHECK_DATETIME"] = unit_price[2].strftime(_DATETIME_FORMAT)
     data_body["DATE"] = date_str
 
     json_body = json.dumps(data_body)
