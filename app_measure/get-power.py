@@ -183,11 +183,11 @@ def get_price_unit(check_date):
     logger.info(check_date.weekday())
     logger.info(jpholiday.is_holiday(check_date.date()))
 
-    if( (datetime.time(hour=22,minute=00,second=00, tzinfo=JST) <= check_time.time) or (check_time.time < datetime.time(hour=8,minute=00,second=00, tzinfo=JST)) ) :
+    if( (datetime.time(hour=22,minute=00,second=00, tzinfo=JST) <= check_time.time()) or (check_time.time() < datetime.time(hour=8,minute=00,second=00, tzinfo=JST)) ) :
         return 17.65, "night time"
 
     if( isHoliday(check_time) == False ) :
-        if((datetime.time(hour=9,minute=00,second=00, tzinfo=JST) <= check_time.time) and (check_time.time < datetime.time(hour=18,minute=00,second=00, tzinfo=JST))) :
+        if((datetime.time(hour=9,minute=00,second=00, tzinfo=JST) <= check_time.time()) and (check_time.time() < datetime.time(hour=18,minute=00,second=00, tzinfo=JST))) :
             return 32.45, "day time"
 
     return 25.62, "life time", check_time
