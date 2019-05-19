@@ -71,42 +71,44 @@ class ResendThread(threading.Thread):
         lock.acquire()       
 
         if os.path.isfile(app_path+'failed_message.txt') : 
-            with open(app_path+'failed_message.txt', 'r') as file:
-                reader = csv.reader(file, delimiter='#')
+
+            os.rename(app_path+'failed_message.txt', app_path+'failed_message_back.txt')
             os.remove(app_path+'failed_message.txt')
+            lock.release()
+
+            with open(app_path+'failed_message_back.txt', 'r') as file:
+                reader = csv.reader(file, delimiter='#')
+
+                self.jwt_token = create_jwt()
+                self.jwt_iat = datetime.datetime.utcnow()
+                self.jwt_exp_mins = jwt_exp_mins
+
+                for message in reader:
+                    seconds_since_issue = (datetime.datetime.utcnow() - self.jwt_iat).seconds
+
+                    if seconds_since_issue > 60 * self.jwt_exp_mins:
+                        logger.info('Refreshing token after {}s').format(seconds_since_issue)
+                        self.jwt_token = create_jwt(
+                                self.args.project_id, self.args.private_key_file, self.args.algorithm)
+                        self.jwt_iat = datetime.datetime.utcnow()
+
+                    logger.info('RePublishing message : \'{}\''.format(message))
+                    resp = publish_message(message[0], message[1], self.jwt_token)
+
+                    #On HTTP error , write message to file.
+                    if resp.status_code != requests.codes.ok:
+                        lock.acquire()       
+                        with open(app_path+'failed_message.txt', 'a') as f:
+                            writer = csv.writer(f, delimiter='#')
+                            writer.writerow([message[0], message[1]])
+                        lock.release()
+
+                    logger.info('HTTP response: ', resp) 
+
+            os.remove(app_path+'failed_message_back.txt')
         else :
             lock.release()
             logger.info('no failed file')
-            resending_status = False
-            return
-
-        lock.release()
-
-        self.jwt_token = create_jwt()
-        self.jwt_iat = datetime.datetime.utcnow()
-        self.jwt_exp_mins = jwt_exp_mins
-        
-        for message in reader:
-            seconds_since_issue = (datetime.datetime.utcnow() - self.jwt_iat).seconds
-
-            if seconds_since_issue > 60 * self.jwt_exp_mins:
-                logger.info('Refreshing token after {}s').format(seconds_since_issue)
-                self.jwt_token = create_jwt(
-                        self.args.project_id, self.args.private_key_file, self.args.algorithm)
-                self.jwt_iat = datetime.datetime.utcnow()
-
-            logger.info('RePublishing message : \'{}\''.format(message))
-            resp = publish_message(message[0], message[1], self.jwt_token)
-
-            #On HTTP error , write message to file.
-            if resp.status_code != requests.codes.ok:
-                lock.acquire()       
-                with open(app_path+'failed_message.txt', 'a') as f:
-                    writer = csv.writer(f, delimiter='#')
-                    writer.writerow([message[0], message[1]])
-                lock.release()
-
-            logger.info('HTTP response: ', resp) 
 
         logger.info('fin resend thread')
         resending_status = False
