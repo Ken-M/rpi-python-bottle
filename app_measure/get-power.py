@@ -73,7 +73,6 @@ class ResendThread(threading.Thread):
         if os.path.isfile(app_path+'failed_message.txt') : 
 
             os.rename(app_path+'failed_message.txt', app_path+'failed_message_back.txt')
-            os.remove(app_path+'failed_message.txt')
             lock.release()
 
             with open(app_path+'failed_message_back.txt', 'r') as file:
