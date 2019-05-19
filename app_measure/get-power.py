@@ -61,9 +61,11 @@ class ResendThread(threading.Thread):
         self.jwt_exp_mins = jwt_exp_mins
         
     def run(self):
-        global resending_status
+        logger.info('resend thread')
 
+        global resending_status
         if resending_status:
+            logger.info('already running')
             return
 
         resending_status = True
@@ -100,6 +102,7 @@ class ResendThread(threading.Thread):
 
             logger.info('HTTP response: ', resp) 
 
+        logger.info('fin resend thread')
         resending_status = False
 
 
@@ -644,12 +647,12 @@ logger.info('Latest configuration: {}'.format(get_config('0', jwt_token).text))
 
 while True :
     sendCommand(GET_NOW_POWER)
-    time.sleep(10)
-    if counter > 10 :
+    time.sleep(5)
+    if counter > 15 :
         counter = 0 
         sendCommand(GET_LATEST30)     
     counter = counter + 1
-    time.sleep(20)
+    time.sleep(5)
 
 # 無限ループだからここには来ないけどな
 ser.close()
