@@ -423,17 +423,16 @@ def parthEA(EDT) :
     json_obj = json.loads(json_body)
 
     logger.info(json_body)
+
+    with open(app_path+'last_integral.json','w') as fw :
+        json.dump(json_obj,fw)
+    logger.info("json file saved")
     
     global jwt_iat
     global jwt_token
     data = send_message("integrated_topic", json_body, jwt_token, jwt_iat)
     jwt_token = data[1]
     jwt_iat = data[2]
-
-    if( data[0].status_code == 200) :
-        with open(app_path+'last_integral.json','w') as fw :
-            json.dump(json_obj,fw)
-        logger.info("json file saved")
 
     logger.info( 'サーバレスポンス :{}'.format(data) )	
 
