@@ -19,6 +19,9 @@ import locale
 import urllib.request
 import urllib.parse
 import jpholiday
+import threading
+import os
+import csv
 
 # [START iot_http_includes]
 import base64
@@ -34,7 +37,7 @@ import requests
 
 # global variables.
 _BASE_URL = 'https://cloudiotdevice.googleapis.com/v1'
-_BACKOFF_DURATION = 60
+_BACKOFF_DURATION = 10
 _DATETIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 _DATE_FORMAT = '%Y-%m-%d' 
 
@@ -44,6 +47,61 @@ unit = 0.1
 jwt_token = ""
 jwt_iat = datetime.datetime.utcnow()
 jwt_exp_mins = 15
+
+lock = threading.Lock()
+
+resending_status = False 
+
+class ResendThread(threading.Thread):
+
+    def __init__(self):
+        super(ResendThread, self).__init__()
+        self.jwt_token = create_jwt()
+        self.jwt_iat = datetime.datetime.utcnow()
+        self.jwt_exp_mins = jwt_exp_mins
+        
+    def run(self):
+        global resending_status
+
+        if resending_status:
+            return
+
+	    resending_status = True
+
+        global lock
+        lock.acquire()       
+
+        if os.path.isfile(app_path+'failed_message.txt') : 
+            with open(app_path+'failed_message.txt', 'r') as file:
+                reader = csv.reader(file, delimiter='#')
+            os.remove(app_path+'failed_message.txt')
+
+        lock.release()
+
+        for message in reader:
+            seconds_since_issue = (datetime.datetime.utcnow() - self.jwt_iat).seconds
+
+            if seconds_since_issue > 60 * self.jwt_exp_mins:
+                logger.info('Refreshing token after {}s').format(seconds_since_issue)
+                self.jwt_token = create_jwt(
+                        self.args.project_id, self.args.private_key_file, self.args.algorithm)
+                self.jwt_iat = datetime.datetime.utcnow()
+
+            logger.info('RePublishing message : \'{}\''.format(message))
+            resp = publish_message(message[0], message[1], self.jwt_token)
+
+            #On HTTP error , write message to file.
+            if resp.status_code != requests.codes.ok:
+                global lock
+                lock.acquire()       
+                with open(app_path+'failed_message.txt', 'a') as f:
+                    writer = csv.writer(f, delimiter='#')
+                    writer.writerow([message[0], message[1]])
+                lock.release()
+
+            logger.info('HTTP response: ', resp) 
+
+        resending_status = False
 
 
 # [START iot_http_jwt]
@@ -145,10 +203,19 @@ def send_message(data_type, message_data, jwt_token, jwt_iat):
     
     try: 
         resp = publish_message(message_data, data_type, jwt_token)
+        
+        resend_thread = ResendThread()
+        resend_thread.start()
     except:
         logger.error('Message send error')
         jwt_token = create_jwt()
         jwt_iat = datetime.datetime.utcnow()
+        global lock
+        lock.acquire()       
+        with open(app_path+'failed_message.txt', 'a') as f:
+            writer = csv.writer(f, delimiter='#')
+            writer.writerow([message_data, data_type])
+        lock.release()
 
     return resp, jwt_token, jwt_iat
 

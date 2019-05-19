@@ -22,6 +22,11 @@ services:
       networks:
         app_net:
           ipv4_address: 172.19.0.5  
+      logging:
+        driver: "json-file" # defaults if not specified
+        options:
+          max-size: "10m"
+          max-file: "5"
 
 networks:
   app_net:
