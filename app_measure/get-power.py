@@ -92,7 +92,6 @@ class ResendThread(threading.Thread):
 
             #On HTTP error , write message to file.
             if resp.status_code != requests.codes.ok:
-                global lock
                 lock.acquire()       
                 with open(app_path+'failed_message.txt', 'a') as f:
                     writer = csv.writer(f, delimiter='#')
