@@ -56,9 +56,6 @@ class ResendThread(threading.Thread):
 
     def __init__(self):
         super(ResendThread, self).__init__()
-        self.jwt_token = create_jwt()
-        self.jwt_iat = datetime.datetime.utcnow()
-        self.jwt_exp_mins = jwt_exp_mins
         
     def run(self):
         logger.info('resend thread')
@@ -85,6 +82,10 @@ class ResendThread(threading.Thread):
 
         lock.release()
 
+        self.jwt_token = create_jwt()
+        self.jwt_iat = datetime.datetime.utcnow()
+        self.jwt_exp_mins = jwt_exp_mins
+        
         for message in reader:
             seconds_since_issue = (datetime.datetime.utcnow() - self.jwt_iat).seconds
 
