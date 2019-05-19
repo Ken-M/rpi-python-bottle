@@ -77,6 +77,11 @@ class ResendThread(threading.Thread):
             with open(app_path+'failed_message.txt', 'r') as file:
                 reader = csv.reader(file, delimiter='#')
             os.remove(app_path+'failed_message.txt')
+        else :
+            lock.release()
+            logger.info('no failed file')
+            resending_status = False
+            return
 
         lock.release()
 
