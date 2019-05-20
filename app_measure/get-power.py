@@ -91,18 +91,26 @@ class ResendThread(threading.Thread):
                                 self.args.project_id, self.args.private_key_file, self.args.algorithm)
                         self.jwt_iat = datetime.datetime.utcnow()
 
-                    logger.info('RePublishing message : \'{}\''.format(message))
-                    resp = publish_message(message[0], message[1], self.jwt_token)
+                    try: 
+                        logger.info('RePublishing message : \'{}\''.format(message))
+                        resp = publish_message(message[0], message[1], self.jwt_token)
 
-                    #On HTTP error , write message to file.
-                    if resp.status_code != requests.codes.ok:
+                        #On HTTP error , write message to file.
+                        if resp.status_code != requests.codes.ok:
+                            lock.acquire()       
+                            with open(app_path+'failed_message.txt', 'a') as f:
+                                writer = csv.writer(f, delimiter='#')
+                                writer.writerow([message[0], message[1]])
+                            lock.release()
+                    except:
+                        logger.error('Resend timeout')
                         lock.acquire()       
                         with open(app_path+'failed_message.txt', 'a') as f:
                             writer = csv.writer(f, delimiter='#')
                             writer.writerow([message[0], message[1]])
-                        lock.release()
+                        lock.release()                        
 
-                    logger.info('HTTP response code: ', resp.status_code)
+                    logger.info( 'サーバレスポンス :{}'.format(resp) )	
                     time.sleep(1) 
 
             os.remove(app_path+'failed_message_back.txt')
@@ -168,7 +176,7 @@ def publish_message(
     logger.info(body)
 
     resp = requests.post(
-            publish_url, data=json.dumps(body), headers=headers)
+            publish_url, data=json.dumps(body), headers=headers, timeout=3.5)
 
     if (resp.status_code != 200):
         logger.warning('Response came back {}, retrying'.format(resp.status_code))
@@ -194,7 +202,7 @@ def get_config(
     config_url = template.format(
         _BASE_URL, project_id, cloud_region, registry_id, device_id, version)
 
-    resp = requests.get(config_url, headers=headers)
+    resp = requests.get(config_url, headers=headers, timeout=3.5)
 
     if (resp.status_code != 200):
         logger.warning('Error getting config: {}, retrying'.format(resp.status_code))
