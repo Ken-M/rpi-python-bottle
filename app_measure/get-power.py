@@ -102,7 +102,8 @@ class ResendThread(threading.Thread):
                             writer.writerow([message[0], message[1]])
                         lock.release()
 
-                    logger.info('HTTP response: ', resp) 
+                    logger.info('HTTP response code: ', resp.status_code)
+                    time.sleep(1) 
 
             os.remove(app_path+'failed_message_back.txt')
         else :
@@ -653,12 +654,12 @@ logger.info('Latest configuration: {}'.format(get_config('0', jwt_token).text))
 
 while True :
     sendCommand(GET_NOW_POWER)
-    time.sleep(5)
+    time.sleep(10)
     if counter > 15 :
         counter = 0 
         sendCommand(GET_LATEST30)     
     counter = counter + 1
-    time.sleep(5)
+    time.sleep(10)
 
 # 無限ループだからここには来ないけどな
 ser.close()
