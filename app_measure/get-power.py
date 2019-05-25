@@ -327,7 +327,7 @@ def get_mining_status() :
                         mining_status_body[name+"_"+"HASHRATE"] = miner["speedInfo"]["hashrateValue"]
                     
                     mining_status_body[name+"_"+"REVENUE_PAR_DAY"] = miner["coinInfo"]["revenuePerDayValueDisplayCurrency"]
-                    mining_status_body[name+"_"+"PROFIT_PAR_DAY"] = miner["coininfo"]["profitPerDayValue"]
+                    mining_status_body[name+"_"+"PROFIT_PAR_DAY"] = miner["coinInfo"]["profitPerDayValue"]
 
                     if( miner["coinInfo"]["isActualPowerUsage"] is not None) :
                         mining_status_body[name+"_"+"POWER_USAGE"] = miner["coinInfo"]["powerUsageValue"]
