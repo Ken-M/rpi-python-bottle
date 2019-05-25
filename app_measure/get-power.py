@@ -308,6 +308,11 @@ def get_mining_status() :
 
     mining_status_body = {}
 
+    total_hash_rate = 0
+    total_revenue_par_day = 0
+    total_profilt_par_day = 0
+    total_power_usage = 0
+
     try :
         resp = requests.get(miner_stat, timeout=3.5)
         logger.info(resp)
@@ -325,17 +330,27 @@ def get_mining_status() :
 
                     if( miner["speedInfo"]["hashrateValue"] is not None) :
                         mining_status_body[name+"_"+"HASHRATE"] = miner["speedInfo"]["hashrateValue"]
+                        total_hash_rate = total_hash_rate + miner["speedInfo"]["hashrateValue"]
                     
                     mining_status_body[name+"_"+"REVENUE_PAR_DAY"] = miner["coinInfo"]["revenuePerDayValueDisplayCurrency"]
+                    total_revenue_par_day = total_revenue_par_day + miner["coinInfo"]["revenuePerDayValueDisplayCurrency"]
+
                     mining_status_body[name+"_"+"PROFIT_PAR_DAY"] = miner["coinInfo"]["profitPerDayValue"]
+                    total_profilt_par_day = total_profilt_par_day + miner["coinInfo"]["profitPerDayValue"]
 
                     if( miner["coinInfo"]["isActualPowerUsage"] is not None) :
                         mining_status_body[name+"_"+"POWER_USAGE"] = miner["coinInfo"]["powerUsageValue"]
+                        total_power_usage = total_power_usage + miner["coinInfo"]["powerUsageValue"]
 
                     if(miner["coinInfo"]["algorithm"] is not None) :
                         mining_status_body[name+"_"+"ALGORITHM"] = miner["coinInfo"]["algorithm"]
 
                     mining_status_body[name+"_"+"GPU_TEMPERATURE"] = miner["maxTemperatureValue"]
+            
+            mining_status_body["TOTAL_HASHRATE"] = total_hash_rate
+            mining_status_body["TOTAL_REVENUE_PAR_DAY"] = total_revenue_par_day
+            mining_status_body["TOTAL_PROFIT_PAR_DAY"] = total_profilt_par_day
+            mining_status_body["TOTAL_POWER_USAGE"] = total_power_usage
                    
     except :
         logger.warning("mining status timeout")
