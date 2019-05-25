@@ -12,3 +12,5 @@ remo_local_addr = ''
 temp_mapping = { "**:**:**:**:**:**":"HOGE",
                  "**:**:**:**:**:**":"FOO",
                  "**:**:**:**:**:**":"BAR" }
+
+miner_stat = ''

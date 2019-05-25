@@ -304,7 +304,45 @@ def get_tempoerature():
     logger.info(temp_data_body)
     return temp_data_body
 
-    
+def get_mining_status() :
+
+    mining_status_body = {}
+
+    try :
+        resp = requests.get(miner_stat, timeout=3.5)
+        logger.info(resp)
+
+        if(resp.status_code == 200) :
+            data_list = resp.json()
+            logger.info(json.dumps(data_list, indent=4))
+            
+            for group in data_list["groupList"] :
+                for miner in group["minerList"] :
+                    name = miner["name"].upper() 
+
+                    mining_status_body[name+"_"+"POOL"] = miner["pool"]
+                    mining_status_body[name+"_"+"SOFTWARE"] = miner["softwareType"]
+
+                    if( miner["speedInfo"]["hashrateValue"] ) :
+                        mining_status_body[name+"_"+"HASHRATE"] = miner["speedInfo"]["hashrateValue"]
+                    
+                    mining_status_body[name+"_"+"REVENUE_PAR_DAY"] = miner["coinInfo"]["revenuePerDayValueDisplayCurrency"]
+                    mining_status_body[name+"_"+"PROFIT_PAR_DAY"] = miner["coininfo"]["profitPerDayValue"]
+
+                    if( miner["coinInfo"]["isActualPowerUsage"]) :
+                        mining_status_body[name+"_"+"POWER_USAGE"] = miner["coinInfo"]["powerUsageValue"]
+
+                    if(miner["coinInfo"]["algorithm"]) :
+                        mining_status_body[name+"_"+"ALGORITHM"] = miner["coinInfo"]["algorithm"]
+
+                    mining_status_body[name+"_"+"GPU_TEMPERATURE"] = miner["maxTemperatureValue"]
+                   
+    except :
+        logger.warning("mining status timeout")
+
+    logger.info(mining_status_body)
+    return mining_status_body
+
 
 
 def parthE7(EDT) :
@@ -330,6 +368,9 @@ def parthE7(EDT) :
 
     temp_body = get_tempoerature()
     data_body.update(temp_body)
+
+    temp_body = get_mining_status()
+    
 
     json_body = json.dumps(data_body)
    
