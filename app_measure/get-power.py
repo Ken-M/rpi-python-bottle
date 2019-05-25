@@ -323,16 +323,16 @@ def get_mining_status() :
                     mining_status_body[name+"_"+"POOL"] = miner["pool"]
                     mining_status_body[name+"_"+"SOFTWARE"] = miner["softwareType"]
 
-                    if( miner["speedInfo"]["hashrateValue"] ) :
+                    if( miner["speedInfo"]["hashrateValue"] is not None) :
                         mining_status_body[name+"_"+"HASHRATE"] = miner["speedInfo"]["hashrateValue"]
                     
                     mining_status_body[name+"_"+"REVENUE_PAR_DAY"] = miner["coinInfo"]["revenuePerDayValueDisplayCurrency"]
                     mining_status_body[name+"_"+"PROFIT_PAR_DAY"] = miner["coininfo"]["profitPerDayValue"]
 
-                    if( miner["coinInfo"]["isActualPowerUsage"]) :
+                    if( miner["coinInfo"]["isActualPowerUsage"] is not None) :
                         mining_status_body[name+"_"+"POWER_USAGE"] = miner["coinInfo"]["powerUsageValue"]
 
-                    if(miner["coinInfo"]["algorithm"]) :
+                    if(miner["coinInfo"]["algorithm"] is not None) :
                         mining_status_body[name+"_"+"ALGORITHM"] = miner["coinInfo"]["algorithm"]
 
                     mining_status_body[name+"_"+"GPU_TEMPERATURE"] = miner["maxTemperatureValue"]
@@ -370,7 +370,7 @@ def parthE7(EDT) :
     data_body.update(temp_body)
 
     temp_body = get_mining_status()
-    
+
 
     json_body = json.dumps(data_body)
    
