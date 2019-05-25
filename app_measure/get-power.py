@@ -370,7 +370,7 @@ def parthE7(EDT) :
     data_body.update(temp_body)
 
     temp_body = get_mining_status()
-
+    data_body.update(temp_body)
 
     json_body = json.dumps(data_body)
    
