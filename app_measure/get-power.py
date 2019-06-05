@@ -43,6 +43,8 @@ _DATE_FORMAT = '%Y-%m-%d'
 
 coeff = 1
 unit = 0.1
+failure_count = 0
+_MAX_FAILURE_COUNT = 5
 
 jwt_token = ""
 jwt_iat = datetime.datetime.utcnow()
@@ -560,6 +562,7 @@ def sendCommand(command_str) :
     # 受信データはたまに違うデータが来たり、
     # 取りこぼしたりして変なデータを拾うことがあるので
     # チェックを厳しめにしてます。
+    global failure_count
     if line.startswith("ERXUDP") :
         cols = line.strip().split(' ')
         res = cols[8]   # UDP受信データ部分
@@ -573,6 +576,7 @@ def sendCommand(command_str) :
         CUR_POSITION = 24
         
         if seoj == "028801" and ESV == "72" :
+            failure_count = 0
             while OPC_COUNT < OPC :
 				# スマートメーター(028801)から来た応答(72)なら
                 EPC = res[CUR_POSITION:CUR_POSITION+2]
@@ -597,6 +601,16 @@ def sendCommand(command_str) :
                     # 内容がEAだったら
                     parthE1(EDT)
                 OPC_COUNT+=1
+        else :
+            failure_count += 1
+    else :
+        failure_count += 1
+
+    logger.info("failure_count :{}".format(failure_count))
+
+    if( failure_count > _MAX_FAILURE_COUNT ) :
+        logger.info("RESTART! :{}".format(failure_count))
+        sys.exit(-1)
 
 
 #ロガー取得
