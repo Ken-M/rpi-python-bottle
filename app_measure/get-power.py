@@ -333,9 +333,13 @@ def get_mining_status() :
                     if( miner["speedInfo"]["hashrateValue"] is not None) :
                         mining_status_body[name+"_"+"HASHRATE"] = miner["speedInfo"]["hashrateValue"]
                         total_hash_rate = total_hash_rate + miner["speedInfo"]["hashrateValue"]
-                    
-                    mining_status_body[name+"_"+"REVENUE_PAR_DAY"] = miner["coinInfo"]["revenuePerDayValueDisplayCurrency"]
-                    total_revenue_par_day = total_revenue_par_day + miner["coinInfo"]["revenuePerDayValueDisplayCurrency"]
+
+                    if( miner["coinInfo"]["revenuePerDayValueDisplayCurrency"] is not None) :
+                        mining_status_body[name+"_"+"REVENUE_PAR_DAY"] = miner["coinInfo"]["revenuePerDayValueDisplayCurrency"]
+                        total_revenue_par_day = total_revenue_par_day + miner["coinInfo"]["revenuePerDayValueDisplayCurrency"]
+                    elif( miner["coinInfo"]["revenuePerDayValue"] is not None) :
+                        mining_status_body[name+"_"+"REVENUE_PAR_DAY"] = miner["coinInfo"]["revenuePerDayValue"]
+                        total_revenue_par_day = total_revenue_par_day + miner["coinInfo"]["revenuePerDayValue"]
 
                     mining_status_body[name+"_"+"PROFIT_PAR_DAY"] = miner["coinInfo"]["profitPerDayValue"]
                     total_profilt_par_day = total_profilt_par_day + miner["coinInfo"]["profitPerDayValue"]
