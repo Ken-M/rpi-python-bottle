@@ -1,5 +1,5 @@
 # Pythonは公式イメージ
-FROM resin/rpi-raspbian:stretch
+FROM balenalib/rpi-raspbian:stretch
 
 # 各ライブラリインストール
 # Pythonがパッケージ依存するものもインストール
