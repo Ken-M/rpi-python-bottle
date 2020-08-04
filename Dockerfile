@@ -1,5 +1,5 @@
 # Pythonは公式イメージ
-FROM hypriot/rpi-python
+FROM resin/rpi-raspbian:stretch
 
 # 各ライブラリインストール
 # Pythonがパッケージ依存するものもインストール
