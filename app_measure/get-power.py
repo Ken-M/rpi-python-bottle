@@ -330,25 +330,25 @@ def get_mining_status() :
                     mining_status_body[name+"_"+"POOL"] = miner["pool"]
                     mining_status_body[name+"_"+"SOFTWARE"] = miner["softwareType"]
 
-                    if( miner["speedInfo"]["hashrateValue"] is not None) :
+                    if( miner["speedInfo"].get("hashrateValue") is not None) :
                         mining_status_body[name+"_"+"HASHRATE"] = miner["speedInfo"]["hashrateValue"]
                         total_hash_rate = total_hash_rate + miner["speedInfo"]["hashrateValue"]
 
-                    if( miner["coinInfo"]["revenuePerDayValueDisplayCurrency"] is not None) :
+                    if( miner["coinInfo"].get("revenuePerDayValueDisplayCurrency") is not None) :
                         mining_status_body[name+"_"+"REVENUE_PAR_DAY"] = miner["coinInfo"]["revenuePerDayValueDisplayCurrency"]
                         total_revenue_par_day = total_revenue_par_day + miner["coinInfo"]["revenuePerDayValueDisplayCurrency"]
-                    elif( miner["coinInfo"]["revenuePerDayValue"] is not None) :
+                    elif( miner["coinInfo"].get("revenuePerDayValue") is not None) :
                         mining_status_body[name+"_"+"REVENUE_PAR_DAY"] = miner["coinInfo"]["revenuePerDayValue"]
                         total_revenue_par_day = total_revenue_par_day + miner["coinInfo"]["revenuePerDayValue"]
 
                     mining_status_body[name+"_"+"PROFIT_PAR_DAY"] = miner["coinInfo"]["profitPerDayValue"]
                     total_profilt_par_day = total_profilt_par_day + miner["coinInfo"]["profitPerDayValue"]
 
-                    if( miner["coinInfo"]["isActualPowerUsage"] is not None) :
+                    if( miner["coinInfo"].get("isActualPowerUsage") is not None) :
                         mining_status_body[name+"_"+"POWER_USAGE"] = miner["coinInfo"]["powerUsageValue"]
                         total_power_usage = total_power_usage + miner["coinInfo"]["powerUsageValue"]
 
-                    if(miner["coinInfo"]["algorithm"] is not None) :
+                    if(miner["coinInfo"].get("algorithm") is not None) :
                         mining_status_body[name+"_"+"ALGORITHM"] = miner["coinInfo"]["algorithm"]
 
                     mining_status_body[name+"_"+"GPU_TEMPERATURE"] = miner["maxTemperatureValue"]
