@@ -13,4 +13,7 @@ temp_mapping = { "**:**:**:**:**:**":"HOGE",
                  "**:**:**:**:**:**":"FOO",
                  "**:**:**:**:**:**":"BAR" }
 
+tuya_mapping = { }
+
 miner_stat = ''
+miner_set_electricity_price = ''

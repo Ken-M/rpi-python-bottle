@@ -365,6 +365,13 @@ def get_mining_status() :
     return mining_status_body
 
 
+def setCurrentElectricityPrice(timestamp) :
+    current_electricity_price = get_price_unit(timestamp)
+    logger.info("Current electricity price: {}", current_electricity_price)
+    query_string = "&value="+str(current_electricity_price)
+    resp = requests.post(miner_set_electricity_price+query_string, timeout=3.5)
+    logger.info(resp)  
+
 
 def parthE7(EDT) :
     # 内容が瞬時電力計測値(E7)だったら
@@ -735,6 +742,9 @@ jwt_exp_mins = 20
 logger.info('Latest configuration: {}'.format(get_config('0', jwt_token).text))
 
 while True :
+    now = datetime.datetime.now(pytz.timezone('Asia/Tokyo'))
+    logger.info('current jst: {}', now)
+    setCurrentElectricityPrice(now)
     sendCommand(GET_NOW_POWER)
     time.sleep(10)
     if counter > 15 :

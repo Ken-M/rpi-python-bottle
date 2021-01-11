@@ -36,7 +36,7 @@ WORKDIR Python-3.8.5
 RUN ./configure && make && make install
 
 # pip3をインストール
-RUN apt-get install -y python3-pip
+RUN apt-get install -y python-crypto python3-pip 
 RUN pip3 install --upgrade pip
 
 # pipでインストール
@@ -58,6 +58,9 @@ RUN pip3 install virtualenv \
                 google-auth \
                 google-cloud-pubsub \
                 pyjwt \
+                pycryptodome \
+                tinytuya \
+                tuyapower \
                 requests
 
 # ユーザ作成
