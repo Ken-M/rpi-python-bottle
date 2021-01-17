@@ -23,6 +23,8 @@ import threading
 import os
 import csv
 
+import tinytuya
+
 # [START iot_http_includes]
 import base64
 import datetime
@@ -240,6 +242,26 @@ def send_message(data_type, message_data, jwt_token, jwt_iat):
     return resp, jwt_token, jwt_iat
 
 
+def get_plug_power()
+    plug_status_body = {}
+
+    for item in plug_mapping
+        logger.info('getting plug data from {}', item['label'])
+
+        d = tinytuya.OutletDevice(item['dev_id'], item['address'], item['local_key'])
+        d.set_version(3.3)
+        data = d.status() 
+
+        # Show status of first controlled switch on device
+        logger.info('Dictionary {}}', data)
+        logger.info('State (bool, true is ON) {}}' , data['dps']['1'])  
+        logger.info('Power {}}' , (float(data['dps']['19'])/10.0))
+
+        plug_status_body[item['label']] = (float(data['dps']['19'])/10.0))
+
+    return plug_status_body
+
+
 def isHoliday(check_date):
     if(check_date.weekday() >= 5) :
         return True
@@ -398,6 +420,9 @@ def parthE7(EDT) :
     data_body.update(temp_body)
 
     temp_body = get_mining_status()
+    data_body.update(temp_body)
+
+    temp_body = get_plug_power()
     data_body.update(temp_body)
 
     json_body = json.dumps(data_body)

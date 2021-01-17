@@ -13,7 +13,7 @@ temp_mapping = { "**:**:**:**:**:**":"HOGE",
                  "**:**:**:**:**:**":"FOO",
                  "**:**:**:**:**:**":"BAR" }
 
-tuya_mapping = { }
+plug_mapping = [{"label":"hoge", "dev_id":"hogehoge", "address":"*.*.*.*", "local_key":"hogehoge"}]
 
 miner_stat = ''
 miner_set_electricity_price = ''
