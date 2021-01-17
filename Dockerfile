@@ -46,22 +46,21 @@ RUN pip3 install --upgrade pip
 # ipython Pythonのインタラクティブモード拡張
 RUN pip3 install --upgrade pip
 RUN pip3 install virtualenv \
-				bottle \
 				ipython \
 				flake8 \
                 pyserial \
                 retry \
                 jpholiday \
-                cryptography \
-                google-api-python-client \
+                cryptography
+RUN pip3 install google-api-python-client \
                 google-auth-httplib2 \
                 google-auth \
                 google-cloud-pubsub \
                 pyjwt \
-                pycryptodome \
-                tinytuya \
-                tuyapower \
                 requests
+RUN pip3 install pycryptodome \
+                tinytuya \
+                tuyapower
 
 # ユーザ作成
 RUN groupadd web
