@@ -30,9 +30,9 @@ RUN apt-get install -y build-essential \
                        libffi-dev
 
 # Python3をインストール
-RUN wget https://www.python.org/ftp/python/3.8.7/Python-3.8.7.tgz
-RUN tar xvf Python-3.8.7.tgz 
-WORKDIR Python-3.8.7
+RUN wget https://www.python.org/ftp/python/3.9.1/Python-3.9.1.tgz
+RUN tar xvf Python-3.9.1.tgz 
+WORKDIR Python-3.9.1
 RUN ./configure && make && make install
 
 # pip3をインストール
