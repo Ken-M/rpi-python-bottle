@@ -52,8 +52,8 @@ RUN pip3 install virtualenv \
                 retry \
                 jpholiday \
                 cryptography
-RUN wget https://www.piwheels.org/simple/grpcio/grpcio-1.34.1-cp35-cp35m-linux_armv7l.whl#sha256=5e488a40ebeb883117aa0dba2cea410ef2ab545a2403b2ac9101e62d42808c71
-RUN pip3 install grpcio-1.34.1-cp35-cp35m-linux_armv7l.whl
+RUN get https://files.pythonhosted.org/packages/eb/db/5c2d42e65add65ded08a2b0d1f27a9c7bbfff74e5c8007c79b5aefb03c32/grpcio-1.34.1-cp36-cp36m-linux_armv7l.whl
+RUN pip3 install grpcio-1.34.1-cp36-cp36m-linux_armv7l.whl
 RUN pip3 install google-api-python-client \
                 google-auth-httplib2 \
                 google-auth \
