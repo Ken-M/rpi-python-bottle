@@ -52,17 +52,16 @@ RUN pip3 install virtualenv \
                 retry \
                 jpholiday \
                 cryptography
-RUN wget https://files.pythonhosted.org/packages/eb/db/5c2d42e65add65ded08a2b0d1f27a9c7bbfff74e5c8007c79b5aefb03c32/grpcio-1.34.1-cp36-cp36m-linux_armv7l.whl
-RUN pip3 install grpcio-1.34.1-cp36-cp36m-linux_armv7l.whl
-RUN pip3 install google-api-python-client \
-                google-auth-httplib2 \
-                google-auth \
-                google-cloud-pubsub \
-                pyjwt \
-                requests
 RUN pip3 install pycryptodome \
                 tinytuya \
-                tuyapower
+                tuyapower \
+                requests \
+                pyjwt
+RUN pip3 install google-api-python-client
+RUN pip3 install google-auth-httplib2
+RUN pip3 install google-auth
+RUN pip3 install google-cloud-pubsub
+               
 
 # ユーザ作成
 RUN groupadd web
