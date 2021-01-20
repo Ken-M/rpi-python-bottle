@@ -30,9 +30,9 @@ RUN apt-get install -y build-essential \
                        libffi-dev
 
 # Python3をインストール
-RUN wget https://www.python.org/ftp/python/3.9.1/Python-3.9.1.tgz
-RUN tar xvf Python-3.9.1.tgz 
-WORKDIR Python-3.9.1
+RUN wget https://www.python.org/ftp/python/3.7.9/Python-3.7.9.tgz
+RUN tar xvf Python-3.7.9.tgz 
+WORKDIR Python-3.7.9
 RUN ./configure && make && make install
 
 # pip3をインストール
@@ -60,6 +60,8 @@ RUN pip3 install pycryptodome \
 RUN pip3 install google-api-python-client
 RUN pip3 install google-auth-httplib2
 RUN pip3 install google-auth
+RUN wget https://www.piwheels.org/simple/grpcio/grpcio-1.34.1-cp37-cp37m-linux_armv7l.whl#sha256=74e1a017a1412513154962d7e462271078fa31b3e9a0df0e3e5ca412b799a154
+RUN pip3 install grpcio-1.34.1-cp37-cp37m-linux_armv7l.whl
 RUN pip3 install google-cloud-pubsub
                
 
