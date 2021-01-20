@@ -242,7 +242,7 @@ def send_message(data_type, message_data, jwt_token, jwt_iat):
     return resp, jwt_token, jwt_iat
 
 
-def get_plug_power()
+def get_plug_power() :
     plug_status_body = {}
 
     for item in plug_mapping
