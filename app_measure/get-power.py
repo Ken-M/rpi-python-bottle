@@ -245,7 +245,7 @@ def send_message(data_type, message_data, jwt_token, jwt_iat):
 def get_plug_power() :
     plug_status_body = {}
 
-    for item in plug_mapping
+    for item in plug_mapping :
         logger.info('getting plug data from {}', item['label'])
 
         d = tinytuya.OutletDevice(item['dev_id'], item['address'], item['local_key'])
