@@ -257,7 +257,7 @@ def get_plug_power() :
         logger.info('State (bool, true is ON) {}}' , data['dps']['1'])  
         logger.info('Power {}}' , (float(data['dps']['19'])/10.0))
 
-        plug_status_body[item['label']] = (float(data['dps']['19'])/10.0))
+        plug_status_body[item['label']] = (float(data['dps']['19'])/10.0)
 
     return plug_status_body
 
