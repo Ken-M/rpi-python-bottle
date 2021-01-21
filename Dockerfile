@@ -41,6 +41,7 @@ RUN make install
 RUN ldconfig -v
 
 # Python3をインストール
+WORKDIR ../
 RUN wget https://www.python.org/ftp/python/3.7.9/Python-3.7.9.tgz
 RUN tar xvf Python-3.7.9.tgz 
 WORKDIR Python-3.7.9
