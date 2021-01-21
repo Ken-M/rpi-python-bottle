@@ -38,10 +38,15 @@ RUN make depend
 RUN make
 RUN make test
 RUN make install
+WORKDIR  /usr/lib/arm-linux-gnueabihf/
+RUN unlink libssl.so.1.1
+RUN unlink libcrypto.so.1.1
+RUN ln -s /usr/local/lib/libssl.so.1.1      libssl.so.1.1
+RUN ln -s /usr/local/lib/libcrypto.so.1.1   libcrypto.so.1.1
 RUN ldconfig -v
 
 # Python3をインストール
-WORKDIR ../
+WORKDIR /
 RUN wget https://www.python.org/ftp/python/3.7.9/Python-3.7.9.tgz
 RUN tar xvf Python-3.7.9.tgz 
 WORKDIR Python-3.7.9
