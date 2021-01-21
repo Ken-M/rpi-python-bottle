@@ -33,7 +33,7 @@ RUN apt-get install -y build-essential \
 RUN wget https://www.openssl.org/source/openssl-1.1.1i.tar.gz
 RUN tar -xf openssl-1.1.1i.tar.gz
 RUN cd openssl-1.1.1i
-RUN config
+RUN ./config
 RUN make depend
 RUN make
 RUN make test
