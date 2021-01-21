@@ -33,11 +33,11 @@ RUN apt-get install -y build-essential \
 RUN wget https://www.openssl.org/source/openssl-1.1.1i.tar.gz
 RUN tar -xf openssl-1.1.1i.tar.gz
 RUN cd openssl-1.1.1i
-RUN sudo ./config
-RUN sudo make depend
-RUN sudo make
-RUN sudo make test
-RUN sudo make install
+RUN config
+RUN make depend
+RUN make
+RUN make test
+RUN make install
 RUN ldconfig -v
 
 # Python3をインストール
