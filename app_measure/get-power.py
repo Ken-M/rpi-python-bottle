@@ -41,6 +41,7 @@ import requests
 _BASE_URL = 'https://cloudiotdevice.googleapis.com/v1'
 _BACKOFF_DURATION = 10
 _DATETIME_FORMAT = '%Y-%m-%d %H:%M:%S'
+_DATETIME_FORMAT_TZ =  '%Y-%m-%dT%H:%M:%S+%z'
 _DATE_FORMAT = '%Y-%m-%d' 
 
 coeff = 1
@@ -769,7 +770,8 @@ logger.info('Latest configuration: {}'.format(get_config('0', jwt_token).text))
 while True :
     JST = datetime.timezone(datetime.timedelta(hours=+9), 'JST')
     cur_timestamp = datetime.datetime.now(JST)
-    logger.info('current jst: {}', cur_timestamp.timetuple())
+    cur_datetime_str = cur_timestamp.strftime(_DATETIME_FORMAT_TZ)
+    logger.info('current jst: {}', cur_datetime_str)
     setCurrentElectricityPrice(cur_timestamp)
     sendCommand(GET_NOW_POWER)
     time.sleep(10)
