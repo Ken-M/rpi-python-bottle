@@ -24,7 +24,6 @@ import os
 import csv
 
 import tinytuya
-import pytz
 
 # [START iot_http_includes]
 import base64
@@ -768,8 +767,9 @@ jwt_exp_mins = 20
 logger.info('Latest configuration: {}'.format(get_config('0', jwt_token).text))
 
 while True :
-    cur_timestamp = datetime.datetime.now(pytz.timezone('Asia/Tokyo'))
-    logger.info('current jst: {}', cur_timestamp)
+    JST = datetime.timezone(datetime.timedelta(hours=+9), 'JST')
+    cur_timestamp = datetime.datetime.now(JST)
+    logger.info('current jst: {}', cur_timestamp.timetuple())
     setCurrentElectricityPrice(cur_timestamp)
     sendCommand(GET_NOW_POWER)
     time.sleep(10)
