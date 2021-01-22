@@ -390,8 +390,8 @@ def get_mining_status() :
 
 def setCurrentElectricityPrice(timestamp) :
     current_electricity_price = get_price_unit(timestamp)
-    logger.info("Current electricity price: {}".format(current_electricity_price))
-    query_string = "&value="+str(current_electricity_price)
+    logger.info("Current electricity price: {}".format(current_electricity_price[0]))
+    query_string = "&value="+str(current_electricity_price[0])
     resp = requests.post(miner_set_electricity_price+query_string, timeout=3.5)
     logger.info(resp)  
 
