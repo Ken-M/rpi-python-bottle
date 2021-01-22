@@ -69,7 +69,8 @@ RUN pip3 install virtualenv \
                 retry \
                 jpholiday \
                 cryptography
-RUN pip3 install pycryptodome \
+RUN pip3 install pytz \ 
+                pycryptodome \
                 tinytuya \
                 tuyapower \
                 requests \
