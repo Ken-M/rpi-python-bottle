@@ -768,9 +768,9 @@ jwt_exp_mins = 20
 logger.info('Latest configuration: {}'.format(get_config('0', jwt_token).text))
 
 while True :
-    now = datetime.datetime.now(pytz.timezone('Asia/Tokyo'))
-    logger.info('current jst: {}', now)
-    setCurrentElectricityPrice(now)
+    cur_timestamp = datetime.datetime.now(pytz.timezone('Asia/Tokyo'))
+    logger.info('current jst: {}', cur_timestamp)
+    setCurrentElectricityPrice(cur_timestamp)
     sendCommand(GET_NOW_POWER)
     time.sleep(10)
     if counter > 15 :
