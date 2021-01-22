@@ -247,16 +247,16 @@ def get_plug_power() :
     plug_status_body = {}
 
     for item in plug_mapping :
-        logger.info('getting plug data from {}', item['label'])
+        logger.info('getting plug data from {}'.format(item['label']))
 
         d = tinytuya.OutletDevice(item['dev_id'], item['address'], item['local_key'])
         d.set_version(3.3)
         data = d.status() 
 
         # Show status of first controlled switch on device
-        logger.info('Dictionary {}}', data)
-        logger.info('State (bool, true is ON) {}}' , data['dps']['1'])  
-        logger.info('Power {}}' , (float(data['dps']['19'])/10.0))
+        logger.info('Dictionary {}'.format(data))
+        logger.info('State (bool, true is ON) {}'.format(data['dps']['1']))  
+        logger.info('Power {}'.format(float(data['dps']['19'])/10.0))
 
         plug_status_body[item['label']] = (float(data['dps']['19'])/10.0)
 
@@ -390,7 +390,7 @@ def get_mining_status() :
 
 def setCurrentElectricityPrice(timestamp) :
     current_electricity_price = get_price_unit(timestamp)
-    logger.info("Current electricity price: {}", current_electricity_price)
+    logger.info("Current electricity price: {}".format(current_electricity_price))
     query_string = "&value="+str(current_electricity_price)
     resp = requests.post(miner_set_electricity_price+query_string, timeout=3.5)
     logger.info(resp)  
@@ -771,7 +771,7 @@ while True :
     JST = datetime.timezone(datetime.timedelta(hours=+9), 'JST')
     cur_timestamp = datetime.datetime.now(JST)
     cur_datetime_str = cur_timestamp.strftime(_DATETIME_FORMAT_TZ)
-    logger.info('current jst: {}', cur_datetime_str)
+    logger.info('current jst: {}'.format(cur_datetime_str))
     setCurrentElectricityPrice(cur_timestamp)
     sendCommand(GET_NOW_POWER)
     time.sleep(10)
