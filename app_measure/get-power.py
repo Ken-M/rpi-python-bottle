@@ -662,6 +662,8 @@ def sendCommand(command_str) :
         logger.info("RESTART! :{}".format(failure_count))
         sys.exit(-1)
 
+    return
+
 
 
 if __name__ == '__main__':
