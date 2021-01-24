@@ -602,7 +602,7 @@ def sendCommand(command_str) :
         else :
             logger.info("err...:{}".format(wait_ok_count))
             wait_ok_count += 1
-            
+
     if wait_ok_count >= _MAX_FAILURE_COUNT :
         failure_count += 1
     else :
@@ -662,137 +662,139 @@ def sendCommand(command_str) :
         logger.info("RESTART! :{}".format(failure_count))
         sys.exit(-1)
 
+if __name__ == '__main__':
+    #ロガー取得
+    logger = logging.getLogger('Logging')
 
-#ロガー取得
-logger = logging.getLogger('Logging')
+    logname = "/var/log/tools/b-route.log"
+    fmt = "%(asctime)s %(levelname)s %(name)s [%(filename)s:%(lineno)d]: %(message)s"
+    logging.basicConfig(level=10, format=fmt)
 
-logname = "/var/log/tools/b-route.log"
-fmt = "%(asctime)s %(levelname)s %(name)s :%(message)s"
-logging.basicConfig(level=10, format=fmt)
+    logger.info("STARTING...")
 
-# シリアルポートデバイス名
-serialPortDev = '/dev/ttyUSB0'  # Linux(ラズパイなど）の場合
+    # シリアルポートデバイス名
+    serialPortDev = '/dev/ttyUSB0'  # Linux(ラズパイなど）の場合
 
-# シリアルポート初期化
-ser = serial.Serial(serialPortDev, 115200, timeout=10)
+    # シリアルポート初期化
+    ser = serial.Serial(serialPortDev, 115200, timeout=10)
 
-# Bルート認証パスワード設定
-ser.write(("SKSETPWD C " + rbpwd + "\r\n").encode())
-ser.readline()
-ser.readline()
+    # Bルート認証パスワード設定
+    ser.write(("SKSETPWD C " + rbpwd + "\r\n").encode())
+    ser.readline()
+    ser.readline()
 
-# Bルート認証ID設定
-ser.write(("SKSETRBID " + rbid + "\r\n").encode())
-ser.readline()
-ser.readline()
+    # Bルート認証ID設定
+    ser.write(("SKSETRBID " + rbid + "\r\n").encode())
+    ser.readline()
+    ser.readline()
 
-scanDuration = 4   # スキャン時間。サンプルでは6なんだけど、4でも行けるので。（ダメなら増やして再試行）
-scanRes = {} # スキャン結果の入れ物
+    scanDuration = 4   # スキャン時間。サンプルでは6なんだけど、4でも行けるので。（ダメなら増やして再試行）
+    scanRes = {} # スキャン結果の入れ物
 
-# スキャンのリトライループ（何か見つかるまで）
-while "Channel" not in scanRes :
-    # アクティブスキャン（IE あり）を行う
-    # 時間かかります。10秒ぐらい？
-    ser.write(("SKSCAN 2 FFFFFFFF " + str(scanDuration) + "\r\n").encode())
+    # スキャンのリトライループ（何か見つかるまで）
+    while "Channel" not in scanRes :
+        # アクティブスキャン（IE あり）を行う
+        # 時間かかります。10秒ぐらい？
+        ser.write(("SKSCAN 2 FFFFFFFF " + str(scanDuration) + "\r\n").encode())
 
-    # スキャン1回について、スキャン終了までのループ
-    scanEnd = False
-    while not scanEnd :
+        # スキャン1回について、スキャン終了までのループ
+        scanEnd = False
+        while not scanEnd :
+            line = str(ser.readline().decode('utf-8'))
+            logger.info(line)
+
+            if line.startswith("EVENT 22") :
+                # スキャン終わったよ（見つかったかどうかは関係なく）
+                scanEnd = True
+            elif line.startswith("  ") :
+                # スキャンして見つかったらスペース2個あけてデータがやってくる
+                # 例
+                #  Channel:39
+                #  Channel Page:09
+                #  Pan ID:FFFF
+                #  Addr:FFFFFFFFFFFFFFFF
+                #  LQI:A7
+                #  PairID:FFFFFFFF
+                cols = line.strip().split(':')
+                scanRes[cols[0]] = cols[1]
+        scanDuration+=1
+
+        if 14 < scanDuration and "Channel" not in scanRes:
+            # 引数としては14まで指定できるが、7で失敗したらそれ以上は無駄っぽい
+            logger.error("スキャンリトライオーバー")
+            ser.close()
+            sys.exit()  #### 糸冬了 ####
+
+    # スキャン結果からChannelを設定。
+    ser.write(("SKSREG S2 " + scanRes["Channel"] + "\r\n").encode())
+    logger.info(str(ser.readline().decode('utf-8')))
+    logger.info(str(ser.readline().decode('utf-8')))
+    #print(ser.readline(), end="") # エコーバック
+    #print(ser.readline(), end="") # OKが来るはず（チェック無し）
+
+    # スキャン結果からPan IDを設定
+    ser.write(("SKSREG S3 " + scanRes["Pan ID"] + "\r\n").encode())
+    #print(ser.readline(), end="") # エコーバック
+    #print(ser.readline(), end="") # OKが来るはず（チェック無し）
+    logger.info(str(ser.readline().decode('utf-8')))
+    logger.info(str(ser.readline().decode('utf-8')))
+
+    # MACアドレス(64bit)をIPV6リンクローカルアドレスに変換。
+    # (BP35A1の機能を使って変換しているけど、単に文字列変換すればいいのではという話も？？)
+    ser.write(("SKLL64 " + scanRes["Addr"] + "\r\n").encode())
+    #print(ser.readline(), end="") # エコーバック
+    logger.info(str(ser.readline().decode('utf-8')))
+    ipv6Addr = str(ser.readline().decode('utf-8')).strip()
+    #print(ipv6Addr)
+
+    # PANA 接続シーケンスを開始します。
+    ser.write(("SKJOIN " + ipv6Addr + "\r\n").encode())
+    #print(ser.readline(), end="") # エコーバック
+    #print(ser.readline(), end="") # OKが来るはず（チェック無し）
+    logger.info(str(ser.readline().decode('utf-8')))
+    logger.info(str(ser.readline().decode('utf-8')))
+
+    # PANA 接続完了待ち（10行ぐらいなんか返してくる）
+    bConnected = False
+    while not bConnected :
         line = str(ser.readline().decode('utf-8'))
-        logger.info(line)
+        #print(line, end="")
+        if line.startswith("EVENT 24") :
+            logger.error("PANA 接続失敗")
+            ser.close()
+            sys.exit()  #### 糸冬了 ####
+        elif line.startswith("EVENT 25") :
+            # 接続完了！
+            bConnected = True
 
-        if line.startswith("EVENT 22") :
-            # スキャン終わったよ（見つかったかどうかは関係なく）
-            scanEnd = True
-        elif line.startswith("  ") :
-            # スキャンして見つかったらスペース2個あけてデータがやってくる
-            # 例
-            #  Channel:39
-            #  Channel Page:09
-            #  Pan ID:FFFF
-            #  Addr:FFFFFFFFFFFFFFFF
-            #  LQI:A7
-            #  PairID:FFFFFFFF
-            cols = line.strip().split(':')
-            scanRes[cols[0]] = cols[1]
-    scanDuration+=1
+    # これ以降、シリアル通信のタイムアウトを設定
+    ser.timeout = 8
 
-    if 14 < scanDuration and "Channel" not in scanRes:
-        # 引数としては14まで指定できるが、7で失敗したらそれ以上は無駄っぽい
-        logger.error("スキャンリトライオーバー")
-        ser.close()
-        sys.exit()  #### 糸冬了 ####
+    # スマートメーターがインスタンスリスト通知を投げてくる
+    # (ECHONET-Lite_Ver.1.12_02.pdf p.4-16)
+    logger.info(str(ser.readline().decode('utf-8')))
 
-# スキャン結果からChannelを設定。
-ser.write(("SKSREG S2 " + scanRes["Channel"] + "\r\n").encode())
-logger.info(str(ser.readline().decode('utf-8')))
-logger.info(str(ser.readline().decode('utf-8')))
-#print(ser.readline(), end="") # エコーバック
-#print(ser.readline(), end="") # OKが来るはず（チェック無し）
+    GetEnd = True
+    counter = 30
 
-# スキャン結果からPan IDを設定
-ser.write(("SKSREG S3 " + scanRes["Pan ID"] + "\r\n").encode())
-#print(ser.readline(), end="") # エコーバック
-#print(ser.readline(), end="") # OKが来るはず（チェック無し）
-logger.info(str(ser.readline().decode('utf-8')))
-logger.info(str(ser.readline().decode('utf-8')))
+    jwt_token = create_jwt()
+    jwt_iat = datetime.datetime.utcnow()
+    jwt_exp_mins = 20
+    logger.info('Latest configuration: {}'.format(get_config('0', jwt_token).text))
 
-# MACアドレス(64bit)をIPV6リンクローカルアドレスに変換。
-# (BP35A1の機能を使って変換しているけど、単に文字列変換すればいいのではという話も？？)
-ser.write(("SKLL64 " + scanRes["Addr"] + "\r\n").encode())
-#print(ser.readline(), end="") # エコーバック
-logger.info(str(ser.readline().decode('utf-8')))
-ipv6Addr = str(ser.readline().decode('utf-8')).strip()
-#print(ipv6Addr)
+    while True :
+        JST = datetime.timezone(datetime.timedelta(hours=+9), 'JST')
+        cur_timestamp = datetime.datetime.now(JST)
+        cur_datetime_str = cur_timestamp.strftime(_DATETIME_FORMAT_TZ)
+        logger.info('current jst: {}'.format(cur_datetime_str))
+        setCurrentElectricityPrice(cur_timestamp)
+        sendCommand(GET_NOW_POWER)
+        time.sleep(10)
+        if counter > 15 :
+            counter = 0 
+            sendCommand(GET_LATEST30)     
+        counter = counter + 1
+        time.sleep(10)
 
-# PANA 接続シーケンスを開始します。
-ser.write(("SKJOIN " + ipv6Addr + "\r\n").encode())
-#print(ser.readline(), end="") # エコーバック
-#print(ser.readline(), end="") # OKが来るはず（チェック無し）
-logger.info(str(ser.readline().decode('utf-8')))
-logger.info(str(ser.readline().decode('utf-8')))
-
-# PANA 接続完了待ち（10行ぐらいなんか返してくる）
-bConnected = False
-while not bConnected :
-    line = str(ser.readline().decode('utf-8'))
-    #print(line, end="")
-    if line.startswith("EVENT 24") :
-        logger.error("PANA 接続失敗")
-        ser.close()
-        sys.exit()  #### 糸冬了 ####
-    elif line.startswith("EVENT 25") :
-        # 接続完了！
-        bConnected = True
-
-# これ以降、シリアル通信のタイムアウトを設定
-ser.timeout = 8
-
-# スマートメーターがインスタンスリスト通知を投げてくる
-# (ECHONET-Lite_Ver.1.12_02.pdf p.4-16)
-logger.info(str(ser.readline().decode('utf-8')))
-
-GetEnd = True
-counter = 30
-
-jwt_token = create_jwt()
-jwt_iat = datetime.datetime.utcnow()
-jwt_exp_mins = 20
-logger.info('Latest configuration: {}'.format(get_config('0', jwt_token).text))
-
-while True :
-    JST = datetime.timezone(datetime.timedelta(hours=+9), 'JST')
-    cur_timestamp = datetime.datetime.now(JST)
-    cur_datetime_str = cur_timestamp.strftime(_DATETIME_FORMAT_TZ)
-    logger.info('current jst: {}'.format(cur_datetime_str))
-    setCurrentElectricityPrice(cur_timestamp)
-    sendCommand(GET_NOW_POWER)
-    time.sleep(10)
-    if counter > 15 :
-        counter = 0 
-        sendCommand(GET_LATEST30)     
-    counter = counter + 1
-    time.sleep(10)
-
-# 無限ループだからここには来ないけどな
-ser.close()
+    # 無限ループだからここには来ないけどな
+    ser.close()
