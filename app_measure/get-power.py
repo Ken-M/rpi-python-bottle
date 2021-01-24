@@ -672,7 +672,7 @@ if __name__ == '__main__':
     logger = logging.getLogger('Logging')
 
     logname = "/var/log/tools/b-route.log"
-    fmt = "%(asctime)s %(levelname)s %(name)s [%(filename)s:%(lineno)d]: %(message)s"
+    fmt = "%(asctime)s %(levelname)s %(name)s [%(thread)d][%(filename)s:%(lineno)d]: %(message)s"
     logging.basicConfig(level=10, format=fmt)
 
     logger.info("STARTING...")
