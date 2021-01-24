@@ -805,6 +805,7 @@ if __name__ == '__main__':
         while sleep_count < 10 :
             time.sleep(1)
             sleep_count = sleep_count +1
+            logger.info('sleep_count:{}'.format(sleep_count))
         if counter > 15 :
             counter = 0
             logger.info('before GET_LATEST30')
@@ -816,6 +817,7 @@ if __name__ == '__main__':
         while sleep_count < 10 :
             time.sleep(1)
             sleep_count = sleep_count +1
+            logger.info('sleep_count:{}'.format(sleep_count))
 
     # 無限ループだからここには来ないけどな
     ser.close()
