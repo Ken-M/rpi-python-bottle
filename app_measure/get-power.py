@@ -663,6 +663,11 @@ def sendCommand(command_str) :
 
     if failure_count > _MAX_FAILURE_COUNT :
         logger.info("RESTART! :{}".format(failure_count))
+        sleep_count=0
+        while sleep_count < 10 :
+            time.sleep(1)
+            sleep_count = sleep_count +1
+            logger.info('sleep_count:{}'.format(sleep_count))
         sys.exit(-1)
     else :
         logger.info("end of sendCommand")
