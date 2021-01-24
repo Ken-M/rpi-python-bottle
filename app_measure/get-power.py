@@ -658,10 +658,11 @@ def sendCommand(command_str) :
 
     logger.info("failure_count :{}".format(failure_count))
 
-    if( failure_count > _MAX_FAILURE_COUNT ) :
+    if failure_count > _MAX_FAILURE_COUNT :
         logger.info("RESTART! :{}".format(failure_count))
         sys.exit(-1)
 
+    logger.info("end of sendCommand")
     return
 
 
