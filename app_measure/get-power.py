@@ -251,15 +251,16 @@ def get_plug_power() :
 
         d = tinytuya.OutletDevice(item['dev_id'], item['address'], item['local_key'])
         d.set_version(3.3)
-        data = d.status() 
+        try:
+            data = d.status()
+            # Show status of first controlled switch on device
+            logger.info('Dictionary {}'.format(data))
+            logger.info('State (bool, true is ON) {}'.format(data['dps']['1']))  
+            logger.info('Power {}'.format(float(data['dps']['19'])/10.0))
 
-        # Show status of first controlled switch on device
-        logger.info('Dictionary {}'.format(data))
-        logger.info('State (bool, true is ON) {}'.format(data['dps']['1']))  
-        logger.info('Power {}'.format(float(data['dps']['19'])/10.0))
-
-        plug_status_body[item['label']] = (float(data['dps']['19'])/10.0)
-
+            plug_status_body[item['label']] = (float(data['dps']['19'])/10.0)
+        except:
+            logger.error("d.status failed.")
     return plug_status_body
 
 
