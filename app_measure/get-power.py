@@ -662,6 +662,8 @@ def sendCommand(command_str) :
         logger.info("RESTART! :{}".format(failure_count))
         sys.exit(-1)
 
+        
+
 if __name__ == '__main__':
     #ロガー取得
     logger = logging.getLogger('Logging')
