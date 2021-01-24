@@ -801,7 +801,10 @@ if __name__ == '__main__':
         logger.info('before GET_NEW_POWER')
         sendCommand(GET_NOW_POWER)
         logger.info('after GET_NEW_POWER')
-        time.sleep(10)
+        sleep_count=0
+        while sleep_count < 10 :
+            time.sleep(1)
+            sleep_count = sleep_count +1
         if counter > 15 :
             counter = 0
             logger.info('before GET_LATEST30')
@@ -809,7 +812,10 @@ if __name__ == '__main__':
             logger.info('after GET_LATEST30')     
         counter = counter + 1
         logger.info('loop counter:{}'.format(counter))   
-        time.sleep(10)
+        sleep_count=0
+        while sleep_count < 10 :
+            time.sleep(1)
+            sleep_count = sleep_count +1
 
     # 無限ループだからここには来ないけどな
     ser.close()
