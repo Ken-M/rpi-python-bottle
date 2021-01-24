@@ -302,6 +302,7 @@ def get_price_unit(check_date):
 
     return 26.09, "life time", check_time
 
+
 def get_tempoerature():
     url = "https://api.nature.global/1/devices"
     headers = {"Content-Type": "application/json", "X-Requested-With":"python", "accept": "application/json", "Expect":"",
@@ -328,6 +329,7 @@ def get_tempoerature():
 
     logger.info(temp_data_body)
     return temp_data_body
+
 
 def get_mining_status() :
 
@@ -791,14 +793,21 @@ if __name__ == '__main__':
         JST = datetime.timezone(datetime.timedelta(hours=+9), 'JST')
         cur_timestamp = datetime.datetime.now(JST)
         cur_datetime_str = cur_timestamp.strftime(_DATETIME_FORMAT_TZ)
+
         logger.info('current jst: {}'.format(cur_datetime_str))
         setCurrentElectricityPrice(cur_timestamp)
+
+        logger.info('before GET_NEW_POWER')
         sendCommand(GET_NOW_POWER)
+        logger.info('after GET_NEW_POWER')
         time.sleep(10)
         if counter > 15 :
-            counter = 0 
-            sendCommand(GET_LATEST30)     
+            counter = 0
+            logger.info('before GET_LATEST30')
+            sendCommand(GET_LATEST30)
+            logger.info('after GET_LATEST30')     
         counter = counter + 1
+        logger.info('loop counter:{}'.format(counter))   
         time.sleep(10)
 
     # 無限ループだからここには来ないけどな
