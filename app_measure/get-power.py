@@ -589,59 +589,72 @@ def sendCommand(command_str) :
     logger.info(str(ser.readline()))
     
     chk_ok = "none"
-    while not chk_ok.startswith("OK") :
-        chk_ok = str(ser.readline().decode('utf-8'))
-        logger.info(chk_ok)
-
-    line = str(ser.readline().decode('utf-8'))         # ERXUDPが来るはず
-    logger.info(line)
-
-    # 受信データはたまに違うデータが来たり、
-    # 取りこぼしたりして変なデータを拾うことがあるので
-    # チェックを厳しめにしてます。
     global failure_count
-    if line.startswith("ERXUDP") :
-        cols = line.strip().split(' ')
-        res = cols[8]   # UDP受信データ部分
-        #tid = res[4:4+4];
-        seoj = res[8:8+6]
-        #deoj = res[14,14+6]
-        ESV = res[20:20+2]
-        OPC_HEX = res[22:22+2]
-        OPC = int(OPC_HEX,16)
-        OPC_COUNT = 0
-        CUR_POSITION = 24
-        
-        if seoj == "028801" and ESV == "72" :
-            failure_count = 0
-            while OPC_COUNT < OPC :
-				# スマートメーター(028801)から来た応答(72)なら
-                EPC = res[CUR_POSITION:CUR_POSITION+2]
-                CUR_POSITION+=2
-                EPD_hex = res[CUR_POSITION:CUR_POSITION+2]
-                EPD = int(EPD_hex, 16)
-                CUR_POSITION+=2
-                EDT = ""
-                if EPD > 0 :
-                    EDT = res[CUR_POSITION:CUR_POSITION+2*EPD]
-                    CUR_POSITION+=2*EPD
-                if EPC == "E7" :
-                    # 内容が瞬時電力計測値(E7)だったら
-                    parthE7(EDT)
-                if EPC == "EA" :
-                    # 内容がEAだったら
-                    parthEA(EDT)
-                if EPC == "D3" :
-                    # 内容がEAだったら
-                    parthD3(EDT)
-                if EPC == "E1" :
-                    # 内容がEAだったら
-                    parthE1(EDT)
-                OPC_COUNT+=1
+    wait_ok_count = 0
+
+    while wait_ok_count < _MAX_FAILURE_COUNT :
+        chk_ok = str(ser.readline().decode('utf-8'))
+        logger.info("checking ok?:{}".format(chk_ok))
+        if chk_ok.startswith("OK") :
+            logger.info("OK!")
+            wait_ok_count = 0
+            break
+        else :
+            logger.info("err...:{}".format(wait_ok_count))
+            wait_ok_count += 1
+            
+    if wait_ok_count >= _MAX_FAILURE_COUNT :
+        failure_count += 1
+    else :
+        line = str(ser.readline().decode('utf-8'))         # ERXUDPが来るはず
+        logger.info(line)
+
+        # 受信データはたまに違うデータが来たり、
+        # 取りこぼしたりして変なデータを拾うことがあるので
+        # チェックを厳しめにしてます。
+
+        if line.startswith("ERXUDP") :
+            cols = line.strip().split(' ')
+            res = cols[8]   # UDP受信データ部分
+            #tid = res[4:4+4];
+            seoj = res[8:8+6]
+            #deoj = res[14,14+6]
+            ESV = res[20:20+2]
+            OPC_HEX = res[22:22+2]
+            OPC = int(OPC_HEX,16)
+            OPC_COUNT = 0
+            CUR_POSITION = 24
+            
+            if seoj == "028801" and ESV == "72" :
+                failure_count = 0
+                while OPC_COUNT < OPC :
+                    # スマートメーター(028801)から来た応答(72)なら
+                    EPC = res[CUR_POSITION:CUR_POSITION+2]
+                    CUR_POSITION+=2
+                    EPD_hex = res[CUR_POSITION:CUR_POSITION+2]
+                    EPD = int(EPD_hex, 16)
+                    CUR_POSITION+=2
+                    EDT = ""
+                    if EPD > 0 :
+                        EDT = res[CUR_POSITION:CUR_POSITION+2*EPD]
+                        CUR_POSITION+=2*EPD
+                    if EPC == "E7" :
+                        # 内容が瞬時電力計測値(E7)だったら
+                        parthE7(EDT)
+                    if EPC == "EA" :
+                        # 内容がEAだったら
+                        parthEA(EDT)
+                    if EPC == "D3" :
+                        # 内容がEAだったら
+                        parthD3(EDT)
+                    if EPC == "E1" :
+                        # 内容がEAだったら
+                        parthE1(EDT)
+                    OPC_COUNT+=1
+            else :
+                failure_count += 1
         else :
             failure_count += 1
-    else :
-        failure_count += 1
 
     logger.info("failure_count :{}".format(failure_count))
 
