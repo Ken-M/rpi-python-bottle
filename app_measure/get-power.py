@@ -65,6 +65,9 @@ class ResendThread(threading.Thread):
     def run(self):
         logger.info('resend thread')
 
+        # test
+        return
+
         global resending_status
         if resending_status:
             logger.info('already running')
