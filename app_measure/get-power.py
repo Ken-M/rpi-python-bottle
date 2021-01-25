@@ -230,8 +230,8 @@ def send_message(data_type, message_data, jwt_token, jwt_iat):
     try: 
         resp = publish_message(message_data, data_type, jwt_token)
 
-        resend_thread = ResendThread()
-        resend_thread.start()
+        # resend_thread = ResendThread()
+        # resend_thread.start()
     except:
         logger.error('Message send error')
         jwt_token = create_jwt()
