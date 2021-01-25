@@ -228,8 +228,8 @@ def send_message(data_type, message_data, jwt_token, jwt_iat):
         resp = publish_message(message_data, data_type, jwt_token)
 
         resend_thread = ResendThread()
-        resend_thread.setDaemon(True)
         resend_thread.start()
+        resend_thread.join()
 
     except:
         logger.error('Message send error')
@@ -716,7 +716,7 @@ if __name__ == '__main__':
         scanEnd = False
         while not scanEnd :
             line = str(ser.readline().decode('utf-8'))
-            logger.info(line)
+            logger.info(line) # ToDo: 無限ループへの対処.
 
             if line.startswith("EVENT 22") :
                 # スキャン終わったよ（見つかったかどうかは関係なく）
