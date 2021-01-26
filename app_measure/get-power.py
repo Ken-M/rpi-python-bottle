@@ -655,9 +655,9 @@ def speak() :
 
     for googlehome in google_home_list:
         logger.info("home speak")
-        googlehome = pygooglehomenotifier.get_googlehomes(ipaddr = googlehome)
-        googlehome[0].wait()
-        googlehome[0].notify("Test.", lang = "en")
+        googlehome_ins = pygooglehomenotifier.get_googlehomes(ipaddr = googlehome)
+        googlehome_ins[0].wait()
+        googlehome_ins[0].notify("Test.", lang = "en")
 
 if __name__ == '__main__':
     #ロガー取得
