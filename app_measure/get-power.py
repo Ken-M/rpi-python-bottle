@@ -22,6 +22,7 @@ import jpholiday
 import threading
 import os
 import csv
+import pygooglehomenotifier
 
 import tinytuya
 
@@ -645,6 +646,18 @@ def sendCommand(command_str) :
         return
 
 
+def speak() :
+    logger.info("home test")
+    googlehomes = pygooglehomenotifier.get_googlehomes()
+    logger.info("home num:{}".format(len(googlehomes)))
+    for googlehome in googlehomes:
+        logger.info("home speak")
+        googlehome.wait()
+        googlehome.notify("Test.", lang = "en")
+
+    for googlehome in googlehomes:
+        googlehome.block_while_playing()
+
 
 if __name__ == '__main__':
     #ロガー取得
@@ -773,6 +786,8 @@ if __name__ == '__main__':
 
         logger.info('current jst: {}'.format(cur_datetime_str))
         setCurrentElectricityPrice(cur_timestamp)
+
+        speak()
 
         logger.info('before GET_NEW_POWER')
         sendCommand(GET_NOW_POWER)

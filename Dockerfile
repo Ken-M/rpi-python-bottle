@@ -53,7 +53,11 @@ WORKDIR Python-3.7.9
 RUN ./configure && make && make install
 
 # pip3をインストール
-RUN apt-get install -y python-crypto python3-pip 
+RUN apt-get install -y python-crypto python3-pip avahi-utils iptables iptables-persistent
+RUN /etc/init.d/dbus start
+RUN /etc/init.d/avahi-daemon start
+RUN iptables -I OUTPUT -p udp --dport 5353 -j ACCEPT
+RUN iptables -I INPUT -p udp --dport 5353 -j ACCEPT
 RUN pip3 install --upgrade pip
 
 # pipでインストール
@@ -80,6 +84,7 @@ RUN pip3 install google-auth
 RUN wget https://www.piwheels.org/simple/grpcio/grpcio-1.34.1-cp37-cp37m-linux_armv7l.whl#sha256=74e1a017a1412513154962d7e462271078fa31b3e9a0df0e3e5ca412b799a154
 RUN pip3 install grpcio-1.34.1-cp37-cp37m-linux_armv7l.whl
 RUN pip3 install google-cloud-pubsub
+RUN pip3 install pygooglehomenotifier
                
 
 # ユーザ作成
