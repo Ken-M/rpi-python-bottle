@@ -659,11 +659,6 @@ def speak() :
         googlehome[0].wait()
         googlehome[0].notify("Test.", lang = "en")
 
-    for googlehome in google_home_list:
-        googlehome = pygooglehomenotifier.get_googlehomes(ipaddr = googlehome)
-        googlehome[0].block_while_playing()
-
-
 if __name__ == '__main__':
     #ロガー取得
     logger = logging.getLogger('Logging')
