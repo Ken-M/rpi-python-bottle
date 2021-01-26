@@ -53,11 +53,7 @@ WORKDIR Python-3.7.9
 RUN ./configure && make && make install
 
 # pip3をインストール
-RUN apt-get install -y python-crypto python3-pip avahi-utils iptables iptables-persistent
-RUN /etc/init.d/dbus start
-RUN /etc/init.d/avahi-daemon start
-RUN iptables -I OUTPUT -p udp --dport 5353 -j ACCEPT
-RUN iptables -I INPUT -p udp --dport 5353 -j ACCEPT
+RUN apt-get install -y python-crypto python3-pip
 RUN pip3 install --upgrade pip
 
 # pipでインストール

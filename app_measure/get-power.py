@@ -648,15 +648,16 @@ def sendCommand(command_str) :
 
 def speak() :
     logger.info("home test")
-    googlehomes = pygooglehomenotifier.get_googlehomes()
-    logger.info("home num:{}".format(len(googlehomes)))
-    for googlehome in googlehomes:
-        logger.info("home speak")
-        googlehome.wait()
-        googlehome.notify("Test.", lang = "en")
 
-    for googlehome in googlehomes:
-        googlehome.block_while_playing()
+    for googlehome in google_home_list:
+        logger.info("home speak")
+        googlehome = pygooglehomenotifier.get_googlehomes(ipaddr = googlehome)
+        googlehome[0].wait()
+        googlehome[0].notify("Test.", lang = "en")
+
+    for googlehome in google_home_list:
+        googlehome = pygooglehomenotifier.get_googlehomes(ipaddr = googlehome)
+        googlehome[0].block_while_playing()
 
 
 if __name__ == '__main__':

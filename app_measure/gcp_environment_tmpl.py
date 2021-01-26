@@ -14,6 +14,7 @@ temp_mapping = { "**:**:**:**:**:**":"HOGE",
                  "**:**:**:**:**:**":"BAR" }
 
 plug_mapping = [{"label":"hoge", "dev_id":"hogehoge", "address":"*.*.*.*", "local_key":"hogehoge"}]
+google_home_list = [ "*.*.*.*", "*.*.*.*" ]
 
 miner_stat = ''
 miner_set_electricity_price = ''
