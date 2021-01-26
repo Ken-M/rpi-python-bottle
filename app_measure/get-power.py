@@ -697,9 +697,16 @@ if __name__ == '__main__':
 
         # スキャン1回について、スキャン終了までのループ
         scanEnd = False
+        scan_counter = 0
         while not scanEnd :
             line = str(ser.readline().decode('utf-8'))
-            logger.info(line) # ToDo: 無限ループへの対処.
+            scan_counter+=1
+            logger.info("counter:{},{}".format(scan_counter,line)) 
+
+            if scan_counter > _MAX_FAILURE_COUNT*10 :
+                logger.error("scanning error!!")
+                ser.close()
+                sys.exit()           
 
             if line.startswith("EVENT 22") :
                 # スキャン終わったよ（見つかったかどうかは関係なく）
