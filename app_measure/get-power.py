@@ -369,9 +369,10 @@ def setCurrentElectricityPrice(timestamp) :
     query_string = "&value="+str(current_electricity_price[0])
     try :
         resp = requests.post(miner_set_electricity_price+query_string, timeout=3.5)
+        logger.info(resp) 
     except :
         logger.exception("setCurrentElectricityPrice failed.")
-    logger.info(resp)  
+     
 
 
 def parthE7(EDT) :
