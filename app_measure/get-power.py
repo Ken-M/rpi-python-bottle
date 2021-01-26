@@ -650,14 +650,19 @@ def sendCommand(command_str) :
         return
 
 
-def speak() :
+def speak(speech_text) :
     logger.info("home test")
 
     for googlehome in google_home_list:
         logger.info("home speak")
-        googlehome_ins = pygooglehomenotifier.get_googlehomes(ipaddr = googlehome)
-        googlehome_ins[0].wait()
-        googlehome_ins[0].notify("Test.", lang = "en")
+        try :
+            googlehome_ins = pygooglehomenotifier.get_googlehomes(ipaddr = googlehome)
+            googlehome_ins[0].wait()
+            googlehome_ins[0].notify(speech_text, lang = "ja")
+            googlehome_ins[0].block_while_playing()
+        except:
+            logger.exception("error in speak")
+
 
 if __name__ == '__main__':
     #ロガー取得
@@ -793,8 +798,6 @@ if __name__ == '__main__':
 
         logger.info('current jst: {}'.format(cur_datetime_str))
         setCurrentElectricityPrice(cur_timestamp)
-
-        speak()
 
         logger.info('before GET_NEW_POWER')
         sendCommand(GET_NOW_POWER)
