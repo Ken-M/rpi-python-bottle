@@ -388,6 +388,10 @@ def parthE7(EDT) :
     body = "瞬時電力:"+str(intPower)+"[W]"
     body = body + "(" + datetime_str + ")"
 
+    if intPower > 3500:
+        for num in range(3):
+            speak("瞬時電力が"+str(intPower)+"ワットを越えました")
+
     data_body = {}
     data_body["TYPE"] = "INSTANTANEOUS"
     data_body["POWER"] = intPower
@@ -651,17 +655,17 @@ def sendCommand(command_str) :
 
 
 def speak(speech_text) :
-    logger.info("home test")
+    logger.info("google home notifier start")
 
     for googlehome in google_home_list:
-        logger.info("home speak")
         try :
             googlehome_ins = pygooglehomenotifier.get_googlehomes(ipaddr = googlehome)
             googlehome_ins[0].wait()
             googlehome_ins[0].notify(speech_text, lang = "ja")
-            googlehome_ins[0].block_while_playing()
         except:
             logger.exception("error in speak")
+
+    logger.info("google home notifier end")
 
 
 if __name__ == '__main__':
