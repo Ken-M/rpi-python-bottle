@@ -62,7 +62,6 @@ RUN pip3 install --upgrade pip
 # flake8 コーディングスタイル/シンタックスのチェック
 # ipython Pythonのインタラクティブモード拡張
 RUN pip3 install --upgrade pip
-RUN pip3 wheel
 RUN pip3 install virtualenv \
 				ipython \
 				flake8 \
