@@ -77,8 +77,10 @@ RUN pip3 install pycryptodome \
 RUN pip3 install google-api-python-client
 RUN pip3 install google-auth-httplib2
 RUN pip3 install google-auth
-RUN pip3 install google-cloud-pubsub
 RUN pip3 install pygooglehomenotifier
+RUN pip3 install grpcio
+RUN pip3 install google-cloud-pubsub
+
                
 
 # ユーザ作成
