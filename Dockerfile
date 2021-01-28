@@ -36,7 +36,7 @@ WORKDIR openssl-1.1.1i
 RUN ./config
 RUN make depend
 RUN make
-RUN make test
+RUN make TESTS=-test_afalg test
 RUN make install
 WORKDIR  /usr/lib/arm-linux-gnueabihf/
 RUN unlink libssl.so.1.1
