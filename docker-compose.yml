@@ -5,6 +5,7 @@ version: "3"
 services:
     measure-application:
       container_name: rpi-python-bottle-app-measure
+      image: kenonemorita/rpi-python-bottle-app-measure
       build: .
       tty: false
       volumes:
