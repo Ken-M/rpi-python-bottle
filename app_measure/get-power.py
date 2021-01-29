@@ -395,7 +395,7 @@ def parthE7(EDT) :
         speak(speak_string + speak_string + speak_string)
 
     global last_instant_sent
-    if (last_instant_sent != None) and ((time_stamp - last_instant_sent) < datetime.timedelta(second=15)) :
+    if (last_instant_sent != None) and ((time_stamp - last_instant_sent) < datetime.timedelta(seconds=15)) :
         logger.info("check power only")
         return
 
