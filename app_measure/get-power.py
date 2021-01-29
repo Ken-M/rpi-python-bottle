@@ -42,7 +42,7 @@ import requests
 _BASE_URL = 'https://cloudiotdevice.googleapis.com/v1'
 _BACKOFF_DURATION = 10
 _DATETIME_FORMAT = '%Y-%m-%d %H:%M:%S'
-_DATETIME_FORMAT_TZ =  '%Y-%m-%dT%H:%M:%S+%z'
+_DATETIME_FORMAT_TZ =  '%Y-%m-%dT%H:%M:%S%z'
 _DATE_FORMAT = '%Y-%m-%d' 
 
 coeff = 1
@@ -53,6 +53,8 @@ _MAX_FAILURE_COUNT = 5
 jwt_token = ""
 jwt_iat = datetime.datetime.utcnow()
 jwt_exp_mins = 15
+
+last_instant_sent = None
 
        
 def try_resend():
@@ -392,6 +394,11 @@ def parthE7(EDT) :
         speak_string = "瞬時電力が"+str(intPower)+"ワットです。"
         speak(speak_string + speak_string + speak_string)
 
+    global last_instant_sent
+    if (last_instant_sent != None) and ((time_stamp - last_instant_sent) < datetime.timedelta(second=15)) :
+        logger.info("check power only")
+        return
+
     data_body = {}
     data_body["TYPE"] = "INSTANTANEOUS"
     data_body["POWER"] = intPower
@@ -415,10 +422,12 @@ def parthE7(EDT) :
     logger.info(json_body)
 
     global jwt_iat
-    global jwt_token
+    global jwt_token    
+    
     data = send_message("instantaneous_topic", json_body, jwt_token, jwt_iat)
     jwt_token = data[1]
     jwt_iat = data[2]
+    last_instant_sent = time_stamp
     
     logger.info( 'サーバレスポンス :{}'.format(data) )	
     
@@ -807,23 +816,14 @@ if __name__ == '__main__':
         sendCommand(GET_NOW_POWER)
         logger.info('after GET_NEW_POWER')
 
-        sleep_count=0
-        while sleep_count < 5 :
-            time.sleep(1)
-            sleep_count = sleep_count +1
-            logger.info('sleep_count:{}'.format(sleep_count))
+        time.sleep(1)
 
         if counter > 15 :
             counter = 0
             logger.info('before GET_LATEST30')
             sendCommand(GET_LATEST30)
-            logger.info('after GET_LATEST30') 
-            
-            sleep_count=0
-            while sleep_count < 5 :
-                time.sleep(1)
-                sleep_count = sleep_count +1
-                logger.info('sleep_count:{}'.format(sleep_count))
+            logger.info('after GET_LATEST30')            
+            time.sleep(1)
 
         counter = counter + 1
         logger.info('loop counter:{}'.format(counter)) 
