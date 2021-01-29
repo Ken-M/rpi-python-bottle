@@ -388,9 +388,9 @@ def parthE7(EDT) :
     body = "瞬時電力:"+str(intPower)+"[W]"
     body = body + "(" + datetime_str + ")"
 
-    if intPower > 3500:
-        for num in range(3):
-            speak("瞬時電力が"+str(intPower)+"ワットを越えました")
+    if intPower > 3000:
+        speak_string = "瞬時電力が"+str(intPower)+"ワットです。"
+        speak(speak_string + speak_string + speak_string)
 
     data_body = {}
     data_body["TYPE"] = "INSTANTANEOUS"
@@ -655,7 +655,7 @@ def sendCommand(command_str) :
 
 
 def speak(speech_text) :
-    logger.info("google home notifier start")
+    logger.info("google home notifier start")  
 
     for googlehome in google_home_list:
         try :
@@ -806,23 +806,28 @@ if __name__ == '__main__':
         logger.info('before GET_NEW_POWER')
         sendCommand(GET_NOW_POWER)
         logger.info('after GET_NEW_POWER')
+
         sleep_count=0
-        while sleep_count < 10 :
+        while sleep_count < 5 :
             time.sleep(1)
             sleep_count = sleep_count +1
             logger.info('sleep_count:{}'.format(sleep_count))
+
         if counter > 15 :
             counter = 0
             logger.info('before GET_LATEST30')
             sendCommand(GET_LATEST30)
-            logger.info('after GET_LATEST30')     
+            logger.info('after GET_LATEST30') 
+            
+            sleep_count=0
+            while sleep_count < 5 :
+                time.sleep(1)
+                sleep_count = sleep_count +1
+                logger.info('sleep_count:{}'.format(sleep_count))
+
         counter = counter + 1
-        logger.info('loop counter:{}'.format(counter))   
-        sleep_count=0
-        while sleep_count < 10 :
-            time.sleep(1)
-            sleep_count = sleep_count +1
-            logger.info('sleep_count:{}'.format(sleep_count))
+        logger.info('loop counter:{}'.format(counter)) 
+
 
     # 無限ループだからここには来ないけどな
     ser.close()
