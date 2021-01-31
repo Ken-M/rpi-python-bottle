@@ -390,7 +390,7 @@ def parthE7(EDT) :
     body = "瞬時電力:"+str(intPower)+"[W]"
     body = body + "(" + datetime_str + ")"
 
-    if intPower > 3000:
+    if intPower > 3500:
         speak_string = "瞬時電力が"+str(intPower)+"ワットです。"
         speak(speak_string + speak_string + speak_string)
 
