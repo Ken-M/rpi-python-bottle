@@ -670,7 +670,7 @@ def speak(speech_text) :
         try :
             googlehome_ins = pygooglehomenotifier.get_googlehomes(ipaddr = googlehome)
             googlehome_ins[0].wait()
-            googlehome_ins[0].notify(speech_text, lang = "ja")
+            googlehome_ins[0].notify(speech_text, lang = "ja",ttsspeed = 1.2, timeout=3)
         except:
             logger.exception("error in speak")
 
