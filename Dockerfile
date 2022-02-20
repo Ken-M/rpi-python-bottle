@@ -30,9 +30,9 @@ RUN apt-get install -y build-essential \
                        libffi-dev
 
 
-RUN wget https://www.openssl.org/source/openssl-1.1.1i.tar.gz
-RUN tar -xf openssl-1.1.1i.tar.gz
-WORKDIR openssl-1.1.1i
+RUN wget https://www.openssl.org/source/openssl-1.1.1m.tar.gz
+RUN tar -xf openssl-1.1.1m.tar.gz
+WORKDIR openssl-1.1.1m
 RUN ./config
 RUN make depend
 RUN make
@@ -47,14 +47,23 @@ RUN ldconfig -v
 
 # Python3をインストール
 WORKDIR /
-RUN wget https://www.python.org/ftp/python/3.9.1/Python-3.9.1.tgz
-RUN tar xvf Python-3.9.1.tgz 
-WORKDIR Python-3.9.1
+RUN wget https://www.python.org/ftp/python/3.10.2/Python-3.10.2.tgz
+RUN tar xvf Python-3.10.2.tgz 
+WORKDIR Python-3.10.2
 RUN ./configure && make && make install
 
 # pip3をインストール
 RUN apt-get install -y python-crypto python3-pip
 RUN pip3 install --upgrade pip
+
+# rust
+ENV RUST_VERSION stable
+ENV HOME /home/root
+ENV PATH $PATH:$HOME/.cargo/bin
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain ${RUST_VERSION}
+
+
+RUN rustup install stable
 
 # pipでインストール
 # virtualenv Pythonの仮想環境構築コマンド
