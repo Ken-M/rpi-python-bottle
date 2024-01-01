@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-registry_id = ""
-project_id = ""
-device_id = ""
-private_key_file = ""
-cloud_region = ""
+sa_email=''
+audience=''
+auth_api='https://www.googleapis.com/oauth2/v4/token'
+key = ""
+algorithm = 'RS256'
 app_path = '/home/bottle/app/'
 remo_local_addr = ''
 

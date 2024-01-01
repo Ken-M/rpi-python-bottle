@@ -1,5 +1,5 @@
 # Pythonは公式イメージ
-FROM balenalib/rpi-raspbian:stretch
+FROM --platform=$BUILDPLATFORM balenalib/rpi-raspbian:bookworm
 
 # 各ライブラリインストール
 # Pythonがパッケージ依存するものもインストール
@@ -17,6 +17,7 @@ RUN apt-get install -y 	vim \
 
 # Python3インストールに必要
 RUN apt-get install -y build-essential \
+                       checkinstall \
                        libncursesw5-dev \
                        libgdbm-dev \
                        libc6-dev \
@@ -27,68 +28,102 @@ RUN apt-get install -y build-essential \
                        openssl \
                        libbz2-dev \
                        libreadline-dev \
-                       libffi-dev
+                       liblzma-dev \
+                       libffi-dev 
+                       # python-dev
+
+RUN apt-get install build-essential libssl-dev libffi-dev \   
+   python3-dev pkg-config      
+RUN apt-get -qy remove python3 python3-grpcio python3-grpc-tools
+RUN apt-get autoremove
 
 
-RUN wget https://www.openssl.org/source/openssl-1.1.1m.tar.gz
-RUN tar -xf openssl-1.1.1m.tar.gz
-WORKDIR openssl-1.1.1m
-RUN ./config
-RUN make depend
-RUN make
-RUN make TESTS=-test_afalg test
-RUN make install
-WORKDIR  /usr/lib/arm-linux-gnueabihf/
-RUN unlink libssl.so.1.1
-RUN unlink libcrypto.so.1.1
-RUN ln -s /usr/local/lib/libssl.so.1.1      libssl.so.1.1
-RUN ln -s /usr/local/lib/libcrypto.so.1.1   libcrypto.so.1.1
-RUN ldconfig -v
+#WORKDIR /usr/local/src
+#RUN wget https://www.openssl.org/source/openssl-3.0.8.tar.gz && tar -xvzf openssl-3.0.8.tar.gz
+
+#WORKDIR /usr/local/src/openssl-3.0.8
+#RUN ./config --prefix=/usr/local/ssl --openssldir=/usr/local/ssl shared zlib -Wl,-Bsymbolic-functions -fPIC shared && make && make install_sw
+#RUN echo /usr/local/ssl/lib64 > /etc/ld.so.conf.d/openssl-3.0.8.conf
+#RUN ldconfig -v
+#RUN apt-get -qy remove openssl
+#RUN apt-get autoremove
+#ENV PATH "$PATH:/usr/local/ssl/bin"
+
+#WORKDIR /usr/local/src
+#RUN rm -rf openssl-3.0.8 openssl-3.0.8.tar.gz
 
 # Python3をインストール
 WORKDIR /
-RUN wget https://www.python.org/ftp/python/3.10.2/Python-3.10.2.tgz
-RUN tar xvf Python-3.10.2.tgz 
-WORKDIR Python-3.10.2
-RUN ./configure && make && make install
+RUN wget https://www.python.org/ftp/python/3.12.1/Python-3.12.1.tar.xz
+RUN tar xvf Python-3.12.1.tar.xz
+WORKDIR Python-3.12.1
+#RUN ./configure --enable-optimizations --with-openssl=/usr/local/ssl --with-openssl-rpath=auto && make && make install
+RUN ./configure --enable-optimizations && make && make install
 
 # pip3をインストール
-RUN apt-get install -y python-crypto python3-pip
 RUN pip3 install --upgrade pip
+RUN python3 -m pip install --upgrade pip setuptools wheel
+RUN pip3 install pip-review
+RUN pip-review --auto
 
 # rust
-ENV RUST_VERSION stable
-ENV HOME /home/root
-ENV PATH $PATH:$HOME/.cargo/bin
-RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain ${RUST_VERSION}
 
+##ENV RUST_VERSION stable
+#ENV HOME /home/root
+##ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL sparse
+#ENV PATH $PATH:$HOME/.cargo/bin
+#RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain ${RUST_VERSION}
 
-RUN rustup install stable
+#RUN rustup install ${RUST_VERSION}
+#RUN rustup update ${RUST_VERSION}
+#RUN . $HOME/.cargo/env
+
+ENV RUST_HOME /usr/local/lib/rust
+ENV RUSTUP_HOME ${RUST_HOME}/rustup
+ENV CARGO_HOME ${RUST_HOME}/cargo
+ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL sparse
+RUN mkdir /usr/local/lib/rust && \
+    chmod 0755 $RUST_HOME
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > ${RUST_HOME}/rustup.sh \
+    && chmod +x ${RUST_HOME}/rustup.sh \
+    && ${RUST_HOME}/rustup.sh -y --default-toolchain stable --no-modify-path
+ENV PATH $PATH:$CARGO_HOME/bin
+
+RUN cargo new --bin build-index \
+  && cd build-index \
+  && cargo add rand_core \
+  && cd .. \
+  && rm -rf build-index
+
+ENV GRPC_PYTHON_BUILD_SYSTEM_OPENSSL 1
+ENV GRPC_PYTHON_BUILD_SYSTEM_ZLIB 1
+
+# ENV OPENSSL_DIR /usr/local/ssl
+# RUN pip3 wheel --wheel-dir=/tmp/wh --no-cache-dir --no-binary :all: cryptography grpcio
+
+# RUN pip3 uninstall -y grpcio grpcio-tools
+# RUN apt-get install -y python3-grpcio python3-grpc-tools
+# RUN apt-get install -y python3-grpc-tools
 
 # pipでインストール
-# virtualenv Pythonの仮想環境構築コマンド
-# bottle Pytrhonの軽量フレームワーク
-# flake8 コーディングスタイル/シンタックスのチェック
-# ipython Pythonのインタラクティブモード拡張
-RUN pip3 install --upgrade pip
-RUN pip3 install virtualenv \
-				ipython \
-				flake8 \
-                pyserial \
-                retry \
-                jpholiday \
-                cryptography
-RUN pip3 install pycryptodome \
-                tinytuya \
-                tuyapower \
-                requests \
-                pyjwt
+RUN pip3 install wheel
+RUN pip3 install pyserial
+RUN pip3 install retry2
+RUN pip3 install jpholiday
+RUN pip3 install pycryptodome
+RUN pip3 install tinytuya
+RUN pip3 install tuyapower
+RUN pip3 install requests
+RUN pip3 install pyjwt
 RUN pip3 install google-api-python-client
 RUN pip3 install google-auth-httplib2
 RUN pip3 install google-auth
-RUN pip3 install pygooglehomenotifier
+RUN pip3 install pychromecast
+RUN pip3 install gTTS
+RUN pip3 install --ignore-installed six
 RUN pip3 install grpcio
-RUN pip3 install google-cloud-pubsub
+RUN pip3 install cryptography
+
 
                
 

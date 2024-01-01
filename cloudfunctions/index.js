@@ -1,15 +1,8 @@
-/**
- * Triggered from a message on a Cloud Pub/Sub topic.
- *
- * @param {!Object} event The Cloud Functions event.
- * @param {!Function} The callback function.
- */
-exports.subscribe =  (event, callback) => {
+const functions = require('@google-cloud/functions-framework');
 
-  const pubsubMessage = event.data;
-  const payload = Buffer.from(pubsubMessage, 'base64').toString();
-  console.log(payload);
-  var json_obj = JSON.parse(payload);
+functions.http('regdata', (req, res) => {
+
+  var json_obj = req.body;
   var insert_obj = {
     insertId: json_obj.DATETIME,
     json: json_obj
@@ -35,11 +28,13 @@ exports.subscribe =  (event, callback) => {
 
   .then(function(result) {
 
-    console.log('BQ INSERTED : ' + payload);
-    callback();
+    console.log('BQ INSERTED');
+    return 'BQ INSERTED';
   })
   .catch((err) => {
     console.error('BQ ERROR : ', err);
-    callback(1);
+    throw new Error(err);
   });
-};
+
+  res.send(`OK`);
+});

@@ -1,9 +1,6 @@
 {
-  "name": "my-ps-to-bq",
-  "version": "0.0.1",
-  "repository": "googleapis/nodejs-bigquery",
   "dependencies": {
-    "@google-cloud/bigquery": "3.0.0",
-    "@google-cloud/pubsub": "^0.18.0"
+    "@google-cloud/bigquery": "^7.0.0",
+    "@google-cloud/functions-framework": "^3.1.0"
   }
 }

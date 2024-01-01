@@ -22,7 +22,9 @@ import jpholiday
 import threading
 import os
 import csv
-import pygooglehomenotifier
+from gtts import gTTS
+import zeroconf
+import pychromecast
 
 import tinytuya
 
@@ -31,7 +33,6 @@ import base64
 import datetime
 import json
 import time
-
 from google.api_core import retry
 import jwt
 import requests
@@ -39,7 +40,6 @@ import requests
 
 
 # global variables.
-_BASE_URL = 'https://cloudiotdevice.googleapis.com/v1'
 _BACKOFF_DURATION = 10
 _DATETIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 _DATETIME_FORMAT_TZ =  '%Y-%m-%dT%H:%M:%S%z'
@@ -51,7 +51,7 @@ failure_count = 0
 _MAX_FAILURE_COUNT = 5
 
 jwt_token = ""
-jwt_iat = datetime.datetime.utcnow()
+jwt_iat = datetime.datetime.now(datetime.UTC)
 jwt_exp_mins = 15
 
 last_instant_sent = None
@@ -68,20 +68,19 @@ def try_resend():
             reader = csv.reader(file, delimiter='#')
 
             jwt_token = create_jwt()
-            jwt_iat = datetime.datetime.utcnow()
+            jwt_iat = datetime.datetime.now(datetime.UTC)
 
             for message in reader:
-                seconds_since_issue = (datetime.datetime.utcnow() - jwt_iat).seconds
+                seconds_since_issue = (datetime.datetime.now(datetime.UTC) - jwt_iat).seconds
 
                 if seconds_since_issue > 60 * jwt_exp_mins:
                     logger.info('Refreshing token after {}s').format(seconds_since_issue)
-                    jwt_token = create_jwt(
-                            args.project_id, args.private_key_file, args.algorithm)
-                    jwt_iat = datetime.datetime.utcnow()
+                    jwt_token = create_jwt()
+                    jwt_iat = datetime.datetime.now(datetime.UTC)
 
                 try: 
                     logger.info('RePublishing message : \'{}\''.format(message))
-                    resp = publish_message(message[0], message[1], jwt_token)
+                    resp = publish_message(message[0], json.loads(message[1]), jwt_token)
 
                     #On HTTP error , write message to file.
                     if resp.status_code != requests.codes.ok:
@@ -103,116 +102,92 @@ def try_resend():
 
     logger.info('fin resend check')
 
+head = {
+    "alg": "RS256",
+    "typ": "JWT"
+}
 
 # [START iot_http_jwt]
 def create_jwt():
+
+    now = int(time.time())
+
+    global head
+
     token = {
             # The time the token was issued.
-            'iat': datetime.datetime.utcnow(),
+            'iat': datetime.datetime.now(datetime.UTC),
             # Token expiration time.
-            'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=60),
-            # The audience field should always be set to the GCP project id.
-            'aud': project_id
+            'exp': datetime.datetime.now(datetime.UTC) + datetime.timedelta(minutes=60),
+            'iss': sa_email,
+            'aud': 'https://www.googleapis.com/oauth2/v4/token',
+            'sub': sa_email,
+            'target_audience':audience
     }
 
-    # Read the private key file.
-    with open(private_key_file, 'r') as f:
-        private_key = f.read()
+    temp_jwt = jwt.encode(token, key, algorithm=algorithm, headers=head)
 
-    logger.info('Creating JWT using {} from private key file {}'.format(
-            algorithm, private_key_file))
+    headers = {
+            'authorization': 'Bearer {}'.format(temp_jwt),
+            'content-type': 'application/x-www-form-urlencoded'
+    }
 
-    return jwt.encode(token, private_key, algorithm=algorithm)
+    message = 'grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion={}'.format(temp_jwt)
+
+    resp = requests.post(
+            auth_api, data=message, headers=headers, timeout=3.5)
+    logger.info("auth_token:")
+    logger.info(resp.json())
+
+    return resp.json()['id_token']
 # [END iot_http_jwt]
 
 @retry.Retry(
     predicate=retry.if_exception_type(AssertionError),
     deadline=_BACKOFF_DURATION)
-# [START iot_http_publish]
 def publish_message(
-        message, data_type, jwt_token):
+        json_body, data_type, jwt_token):
     headers = {
             'authorization': 'Bearer {}'.format(jwt_token),
             'content-type': 'application/json',
             'cache-control': 'no-cache'
     }
 
-    # Publish to the events or state topic based on the flag.
-    url_suffix = 'publishEvent' if message_type == 'event' else 'setState'
-
-    publish_url = (
-        '{}/projects/{}/locations/{}/registries/{}/devices/{}:{}').format(
-            _BASE_URL, project_id, cloud_region, registry_id, device_id,
-            url_suffix)
-
-    body = None
-    msg_bytes = base64.urlsafe_b64encode(message.encode('utf-8'))
-
-    if message_type == 'event':
-        body = {'binary_data': msg_bytes.decode('ascii'), 'sub_folder': data_type}
-    else:
-        body = {
-          'state': {'binary_data': msg_bytes.decode('ascii')}
-        }
-
-    logger.info(body)
-
+    logger.info("trig. clolud function.")
+    logger.info(json.dumps(json_body))
     resp = requests.post(
-            publish_url, data=json.dumps(body), headers=headers, timeout=3.5)
+            audience, json=json_body, headers=headers, timeout=3.5)
+    logger.info(resp.request.headers)
+    logger.info(resp.request.body)
+    logger.info(resp.status_code)
+    logger.info(resp.reason)
 
     if (resp.status_code != 200):
         logger.warning('Response came back {}, retrying'.format(resp.status_code))
         raise AssertionError('Not OK response: {}'.format(resp.status_code))
 
     return resp
-# [END iot_http_publish]
 
-@retry.Retry(
-    predicate=retry.if_exception_type(AssertionError),
-    deadline=_BACKOFF_DURATION)
-# [START iot_http_getconfig]
-def get_config(
-        version, jwt_token):
-    headers = {
-            'authorization': 'Bearer {}'.format(jwt_token),
-            'content-type': 'application/json',
-            'cache-control': 'no-cache'
-    }
-
-    basepath = '{}/projects/{}/locations/{}/registries/{}/devices/{}/'
-    template = basepath + 'config?local_version={}'
-    config_url = template.format(
-        _BASE_URL, project_id, cloud_region, registry_id, device_id, version)
-
-    resp = requests.get(config_url, headers=headers, timeout=3.5)
-
-    if (resp.status_code != 200):
-        logger.warning('Error getting config: {}, retrying'.format(resp.status_code))
-        raise AssertionError('Not OK response: {}'.format(resp.status_code))
-
-    return resp
-# [END iot_http_getconfig]
-
-def send_message(data_type, message_data, jwt_token, jwt_iat):
-    seconds_since_issue = (datetime.datetime.utcnow() - jwt_iat).seconds
+def send_message(data_type, json_body, jwt_token, jwt_iat):
+    seconds_since_issue = (datetime.datetime.now(datetime.UTC) - jwt_iat).seconds
     resp = requests.Response()
 
     if seconds_since_issue > 60 * jwt_exp_mins:
         jwt_token = create_jwt()
-        jwt_iat = datetime.datetime.utcnow()
+        jwt_iat = datetime.datetime.now(datetime.UTC)
     
     try: 
-        resp = publish_message(message_data, data_type, jwt_token)
+        resp = publish_message(json_body, data_type, jwt_token)
         try_resend()
 
     except:
         logger.exception('Message send error')
         jwt_token = create_jwt()
-        jwt_iat = datetime.datetime.utcnow()
+        jwt_iat = datetime.datetime.now(datetime.UTC)
     
         with open(app_path+'failed_message.txt', 'a') as f:
             writer = csv.writer(f, delimiter='#')
-            writer.writerow([message_data, data_type])
+            writer.writerow([json.dumps(json_body), data_type])
 
     return resp, jwt_token, jwt_iat
 
@@ -268,14 +243,30 @@ def get_price_unit(check_date):
     logger.info(check_date.weekday())
     logger.info(jpholiday.is_holiday(check_date.date()))
 
-    if( (datetime.time(hour=22,minute=00,second=00, tzinfo=JST) <= check_time.timetz()) or (check_time.timetz() < datetime.time(hour=8,minute=00,second=00, tzinfo=JST)) ) :
-        return 20.98, "night time", check_time
+    check_time_yesterday = check_time - datetime.timedelta(days=1)    
+
+    if( isHoliday(check_time) == True ) :
+        if (datetime.time(hour=22,minute=00,second=00, tzinfo=JST) <= check_time.timetz()) :
+            return 22.98, "night time", check_time
+    if( isHoliday(check_time_yesterday) == True) :
+        if (check_time.timetz() < datetime.time(hour=8,minute=00,second=00, tzinfo=JST)) :
+            return 22.98, "night time", check_time
 
     if( isHoliday(check_time) == False ) :
-        if((datetime.time(hour=9,minute=00,second=00, tzinfo=JST) <= check_time.timetz()) and (check_time.timetz() < datetime.time(hour=18,minute=00,second=00, tzinfo=JST))) :
-            return 21.05, "day time", check_time
+        if (datetime.time(hour=23,minute=00,second=00, tzinfo=JST) <= check_time.timetz()) :
+            return 22.98, "night time", check_time
+    if( isHoliday(check_time_yesterday) == False) :
+        if (check_time.timetz() < datetime.time(hour=6,minute=00,second=00, tzinfo=JST)) :
+            return 22.98, "night time", check_time
 
-    return 26.09, "life time", check_time
+    if( isHoliday(check_time) == False ) :
+        if((datetime.time(hour=9,minute=00,second=00, tzinfo=JST) <= check_time.timetz()) and (check_time.timetz() < datetime.time(hour=16,minute=00,second=00, tzinfo=JST))) :
+            return 20.05, "day time", check_time
+    else:
+        if((datetime.time(hour=8,minute=00,second=00, tzinfo=JST) <= check_time.timetz()) and (check_time.timetz() < datetime.time(hour=22,minute=00,second=00, tzinfo=JST))) :
+            return 20.05, "day time", check_time
+
+    return 32.65, "life time", check_time
 
 
 def get_tempoerature():
@@ -392,10 +383,10 @@ def parthE7(EDT) :
 
     if intPower > 3800:
         speak_string = "瞬時電力が"+str(intPower)+"ワットです。"
-        speak(speak_string + speak_string + speak_string)
+        speak(speak_string)
 
     global last_instant_sent
-    if (last_instant_sent != None) and ((time_stamp - last_instant_sent) < datetime.timedelta(seconds=15)) :
+    if (last_instant_sent is not None) and ((time_stamp - last_instant_sent) < datetime.timedelta(seconds=15)) :
         logger.info("check power only")
         return
 
@@ -416,10 +407,10 @@ def parthE7(EDT) :
     temp_body = get_plug_power()
     data_body.update(temp_body)
 
-    json_body = json.dumps(data_body)
+    json_body = data_body
    
     logger.info(body)
-    logger.info(json_body)
+    logger.info(json.dumps(json_body))
 
     global jwt_iat
     global jwt_token    
@@ -514,13 +505,11 @@ def parthEA(EDT) :
     data_body["CHECK_DATETIME"] = unit_price[2].strftime(_DATETIME_FORMAT)
     data_body["DATE"] = date_str
 
-    json_body = json.dumps(data_body)
-    json_obj = json.loads(json_body)
-
-    logger.info(json_body)
+    json_body = data_body
+    logger.info(json.dumps(json_body))
 
     with open(app_path+'last_integral.json','w') as fw :
-        json.dump(json_obj,fw)
+        json.dump(json_body,fw)
     logger.info("json file saved")
     
     global jwt_iat
@@ -664,13 +653,39 @@ def sendCommand(command_str) :
 
 
 def speak(speech_text) :
-    logger.info("google home notifier start")  
+    logger.info("pychromecast start")  
 
-    for googlehome in google_home_list:
+    casts, browser = pychromecast.get_chromecasts(known_hosts=google_home_list)
+    # Shut down discovery as we don't care about updates
+    browser.stop_discovery()
+
+    speack_enc = urllib.parse.quote(speech_text)
+    mp3url = "http://translate.google.com/translate_tts?ie=UTF-8&q="+speack_enc+"&tl=ja&client=tw-ob"
+    logger.info(mp3url)
+
+    for googlehome in casts:
         try :
-            googlehome_ins = pygooglehomenotifier.get_googlehomes(ipaddr = googlehome)
-            googlehome_ins[0].wait()
-            googlehome_ins[0].notify(speech_text, lang = "ja",ttsspeed = 1.2, timeout=3)
+            mc = googlehome.media_controller
+            googlehome.wait()
+            mc.play_media(mp3url,'audio/mp3')
+
+            # Wait for player_state PLAYING
+            player_state = None
+            t = 10
+            has_played = True
+            while (t>0 and has_played == True) :
+                if player_state != googlehome.media_controller.status.player_state:
+                    player_state = googlehome.media_controller.status.player_state
+                    logger.info("Player state:{}".format(googlehome.media_controller.status))
+                if player_state == "PLAYING":
+                    has_played = True
+                if googlehome.socket_client.is_connected and has_played and player_state != "PLAYING":
+                    has_played = False
+                    break
+
+                time.sleep(0.1)
+                t = t - 0.1
+
         except:
             logger.exception("error in speak")
 
@@ -800,9 +815,8 @@ if __name__ == '__main__':
     counter = 30
 
     jwt_token = create_jwt()
-    jwt_iat = datetime.datetime.utcnow()
+    jwt_iat = datetime.datetime.now(datetime.UTC)
     jwt_exp_mins = 20
-    logger.info('Latest configuration: {}'.format(get_config('0', jwt_token).text))
 
     while True :
         JST = datetime.timezone(datetime.timedelta(hours=+9), 'JST')
