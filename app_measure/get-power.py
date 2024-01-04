@@ -51,13 +51,15 @@ failure_count = 0
 _MAX_FAILURE_COUNT = 5
 
 jwt_token = ""
-jwt_iat = datetime.datetime.now(datetime.UTC)
+jwt_iat = None
 jwt_exp_mins = 15
 
 last_instant_sent = None
 
        
 def try_resend():
+    global jwt_token
+
     logger.info('resend check')
 
     if os.path.isfile(app_path+'failed_message.txt') : 
@@ -67,33 +69,23 @@ def try_resend():
         with open(app_path+'failed_message_back.txt', 'r') as file:
             reader = csv.reader(file, delimiter='#')
 
-            jwt_token = create_jwt()
-            jwt_iat = datetime.datetime.now(datetime.UTC)
-
             for message in reader:
-                seconds_since_issue = (datetime.datetime.now(datetime.UTC) - jwt_iat).seconds
-
-                if seconds_since_issue > 60 * jwt_exp_mins:
-                    logger.info('Refreshing token after {}s').format(seconds_since_issue)
-                    jwt_token = create_jwt()
-                    jwt_iat = datetime.datetime.now(datetime.UTC)
-
                 try: 
+                    jwt_token = create_jwt()
                     logger.info('RePublishing message : \'{}\''.format(message))
-                    resp = publish_message(message[0], json.loads(message[1]), jwt_token)
+                    resp = publish_message(json.loads(message[0]), jwt_token)
 
                     #On HTTP error , write message to file.
                     if resp.status_code != requests.codes.ok:
                         with open(app_path+'failed_message.txt', 'a') as f:
                             writer = csv.writer(f, delimiter='#')
-                            writer.writerow([message[0], message[1]])
-                except:
-                    logger.error('Resend timeout')
+                            writer.writerow([message[0]])
+                except Exception as e:
+                    logger.error('Resend error:{}'.format(e))
                     with open(app_path+'failed_message.txt', 'a') as f:
                         writer = csv.writer(f, delimiter='#')
-                        writer.writerow([message[0], message[1]])                     
-
-                logger.info( 'サーバレスポンス :{}'.format(resp) )	
+                        writer.writerow([message[0]])                     
+	
                 time.sleep(1) 
 
         os.remove(app_path+'failed_message_back.txt')
@@ -102,17 +94,25 @@ def try_resend():
 
     logger.info('fin resend check')
 
-head = {
-    "alg": "RS256",
-    "typ": "JWT"
-}
 
-# [START iot_http_jwt]
 def create_jwt():
+    global jwt_iat
+    global jwt_token  
+    temp_token = jwt_token
 
-    now = int(time.time())
+    seconds_since_issue = 60 * jwt_exp_mins
 
-    global head
+    if jwt_iat is not None:
+        seconds_since_issue = (datetime.datetime.now(datetime.UTC) - jwt_iat).seconds
+
+    if seconds_since_issue < 60 * jwt_exp_mins:
+        logger.info('No need to refresh {}s'.format(seconds_since_issue))
+        return temp_token
+
+    head = {
+        "alg": "RS256",
+        "typ": "JWT"
+    }
 
     token = {
             # The time the token was issued.
@@ -139,28 +139,29 @@ def create_jwt():
     logger.info("auth_token:")
     logger.info(resp.json())
 
+    if resp.status_code == requests.codes.ok:
+        jwt_iat = datetime.datetime.now(datetime.UTC)
+        logger.info('token refresh {}s'.format(jwt_iat))
+
     return resp.json()['id_token']
-# [END iot_http_jwt]
+
 
 @retry.Retry(
     predicate=retry.if_exception_type(AssertionError),
     deadline=_BACKOFF_DURATION)
 def publish_message(
-        json_body, data_type, jwt_token):
+        json_body, jwt_token):
     headers = {
             'authorization': 'Bearer {}'.format(jwt_token),
             'content-type': 'application/json',
             'cache-control': 'no-cache'
     }
 
-    logger.info("trig. clolud function.")
+    logger.info("trig. cloud function.")
+    # logger.info(headers)
     logger.info(json.dumps(json_body))
     resp = requests.post(
             audience, json=json_body, headers=headers, timeout=3.5)
-    logger.info(resp.request.headers)
-    logger.info(resp.request.body)
-    logger.info(resp.status_code)
-    logger.info(resp.reason)
 
     if (resp.status_code != 200):
         logger.warning('Response came back {}, retrying'.format(resp.status_code))
@@ -168,28 +169,23 @@ def publish_message(
 
     return resp
 
-def send_message(data_type, json_body, jwt_token, jwt_iat):
-    seconds_since_issue = (datetime.datetime.now(datetime.UTC) - jwt_iat).seconds
+def send_message(json_body):
+    global jwt_token
     resp = requests.Response()
 
-    if seconds_since_issue > 60 * jwt_exp_mins:
-        jwt_token = create_jwt()
-        jwt_iat = datetime.datetime.now(datetime.UTC)
-    
     try: 
-        resp = publish_message(json_body, data_type, jwt_token)
+        jwt_token = create_jwt()
+        resp = publish_message(json_body, jwt_token)
         try_resend()
 
-    except:
-        logger.exception('Message send error')
-        jwt_token = create_jwt()
-        jwt_iat = datetime.datetime.now(datetime.UTC)
+    except Exception as e:
+        logger.exception('Message send error:{}'.format(e))
     
         with open(app_path+'failed_message.txt', 'a') as f:
             writer = csv.writer(f, delimiter='#')
-            writer.writerow([json.dumps(json_body), data_type])
+            writer.writerow([json.dumps(json_body)])
 
-    return resp, jwt_token, jwt_iat
+    return resp
 
 
 def get_plug_power() :
@@ -208,8 +204,9 @@ def get_plug_power() :
             logger.info('Power {}'.format(float(data['dps']['19'])/10.0))
 
             plug_status_body[item['label']] = (float(data['dps']['19'])/10.0)
-        except:
-            logger.error("d.status failed.")
+        except Exception as e:
+            logger.error('d.status failed:{}'.format(e))
+
     return plug_status_body
 
 
@@ -288,10 +285,11 @@ def get_tempoerature():
                 try :
                     label = temp_mapping[mac_address]
                     temp_data_body['TEMPERATURE_{}'.format(label)] = item["newest_events"]["te"]["val"]
-                except:
-                    logger.warning('{} is not in temp mapping.'.format(mac_address))
-    except :
-        logger.warning("temperature timeout")
+                except Exception as e:
+                    logger.warning('{} is not in temp mapping:{}'.format(mac_address, e))
+
+    except Exception as e:
+        logger.warning("temperature timeout. {}".format(e))
 
     logger.info(temp_data_body)
     return temp_data_body
@@ -349,8 +347,8 @@ def get_mining_status() :
             mining_status_body["TOTAL_PROFIT_PAR_DAY"] = total_profilt_par_day
             mining_status_body["TOTAL_POWER_USAGE"] = total_power_usage
                    
-    except :
-        logger.warning("mining status timeout")
+    except Exception as e:
+        logger.warning("mining status timeout. {}".format(e))
 
     logger.info(mining_status_body)
     return mining_status_body
@@ -363,9 +361,8 @@ def setCurrentElectricityPrice(timestamp) :
     try :
         resp = requests.post(miner_set_electricity_price+query_string, timeout=3.5)
         logger.info(resp) 
-    except :
-        logger.exception("setCurrentElectricityPrice failed.")
-     
+    except Exception as e:
+        logger.warning("setCurrentElectricityPrice failed. {}".format(e))
 
 
 def parthE7(EDT) :
@@ -411,17 +408,10 @@ def parthE7(EDT) :
    
     logger.info(body)
     logger.info(json.dumps(json_body))
-
-    global jwt_iat
-    global jwt_token    
-    
-    data = send_message("instantaneous_topic", json_body, jwt_token, jwt_iat)
-    jwt_token = data[1]
-    jwt_iat = data[2]
+  
+    data = send_message(json_body)
     last_instant_sent = time_stamp
-    
-    logger.info( 'サーバレスポンス :{}'.format(data) )	
-    
+   
 
 
 def parthEA(EDT) :
@@ -512,13 +502,7 @@ def parthEA(EDT) :
         json.dump(json_body,fw)
     logger.info("json file saved")
     
-    global jwt_iat
-    global jwt_token
-    data = send_message("integrated_topic", json_body, jwt_token, jwt_iat)
-    jwt_token = data[1]
-    jwt_iat = data[2]
-
-    logger.info( 'サーバレスポンス :{}'.format(data) )	
+    data = send_message(json_body)
 
 
 def parthD3(EDT) :
@@ -686,8 +670,8 @@ def speak(speech_text) :
                 time.sleep(0.1)
                 t = t - 0.1
 
-        except:
-            logger.exception("error in speak")
+        except Exception as e:
+            logger.exception('error in speak:{}'.format(e))
 
     logger.info("google home notifier end")
 
@@ -813,10 +797,6 @@ if __name__ == '__main__':
 
     GetEnd = True
     counter = 30
-
-    jwt_token = create_jwt()
-    jwt_iat = datetime.datetime.now(datetime.UTC)
-    jwt_exp_mins = 20
 
     while True :
         JST = datetime.timezone(datetime.timedelta(hours=+9), 'JST')
