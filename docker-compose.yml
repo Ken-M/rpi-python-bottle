@@ -1,0 +1,37 @@
+   
+services:
+    measure-application:
+      container_name: rpi-python-bottle-app-measure
+      image: kenonemorita/rpi-python-bottle-app-measure
+      build: .
+      tty: false
+      volumes:
+       - ./app_measure:/home/bottle/app
+      environment:
+        CODEIGNITER_ENV: development
+      devices:
+       - "/dev/ttyUSB0:/dev/ttyUSB0:rwm"
+      entrypoint:
+       - /usr/local/bin/python3
+       - /home/bottle/app/get-power.py
+      privileged: true
+      cap_add:
+       - SYS_RAWIO
+      networks:
+        app_net:
+          ipv4_address: 172.19.0.5  
+      logging:
+        driver: "json-file" # defaults if not specified
+        options:
+          max-size: "10m"
+          max-file: "5"
+      restart: always
+
+networks:
+  app_net:
+    driver: bridge
+    ipam:
+     driver: default
+     config:
+       - subnet: 172.19.0.0/16
+
