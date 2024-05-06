@@ -54,9 +54,9 @@ RUN apt-get autoremove
 
 # Python3をインストール
 WORKDIR /
-RUN wget https://www.python.org/ftp/python/3.12.1/Python-3.12.1.tar.xz
-RUN tar xvf Python-3.12.1.tar.xz
-WORKDIR Python-3.12.1
+RUN wget https://www.python.org/ftp/python/3.12.3/Python-3.12.3.tar.xz
+RUN tar xvf Python-3.12.3.tar.xz
+WORKDIR Python-3.12.3
 #RUN ./configure --enable-optimizations --with-openssl=/usr/local/ssl --with-openssl-rpath=auto && make && make install
 RUN ./configure --enable-optimizations && make && make install
 
@@ -111,21 +111,17 @@ RUN pip3 install pyserial
 RUN pip3 install retry2
 RUN pip3 install jpholiday
 RUN pip3 install pycryptodome
-RUN pip3 install tinytuya
-RUN pip3 install tuyapower
 RUN pip3 install requests
 RUN pip3 install pyjwt
 RUN pip3 install google-api-python-client
 RUN pip3 install google-auth-httplib2
 RUN pip3 install google-auth
 RUN pip3 install pychromecast
-RUN pip3 install gTTS
 RUN pip3 install --ignore-installed six
 RUN pip3 install grpcio
 RUN pip3 install cryptography
-
-
-               
+RUN pip3 install pip-review
+RUN pip-review --auto               
 
 # ユーザ作成
 RUN groupadd web
@@ -137,10 +133,3 @@ RUN usermod -a -G dialout bottle
 # RUN chmod 0666 /dev/ttyUSB0
 USER bottle
 
-# vim の設定ファイル
-ADD ./vim/.vimrc /home/bottle/
-RUN mkdir /home/bottle/.vim
-RUN mkdir /home/bottle/.vim/ftplugin
-ADD ./vim/python.vim /home/bottle/.vim/ftplugin/
-RUN mkdir /home/bottle/.vim/bundle
-RUN git clone https://github.com/Shougo/neobundle.vim /home/bottle/.vim/bundle/neobundle.vim

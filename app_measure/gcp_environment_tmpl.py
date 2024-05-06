@@ -9,11 +9,15 @@ algorithm = 'RS256'
 app_path = '/home/bottle/app/'
 remo_local_addr = ''
 
-temp_mapping = { "**:**:**:**:**:**":"HOGE",
-                 "**:**:**:**:**:**":"FOO",
-                 "**:**:**:**:**:**":"BAR" }
+hub_mapping =  [ {"label":"a" ,"deviceId":"DUMMY_______"},
+                 {"label":"b" ,"deviceId":"DUMMY_______"},
+                 {"label":"c" ,"deviceId":"DUMMY_______"},
+                 {"label":"d" ,"deviceId":"DUMMY_______"}]
 
-plug_mapping = [{"label":"hoge", "dev_id":"hogehoge", "address":"*.*.*.*", "local_key":"hogehoge"}]
+plug_mapping = [{"label":"a"  ,"deviceId":"DUMMY_______"},
+                {"label":"b"  ,"deviceId":"DUMMY_______"},
+                {"label":"c"  ,"deviceId":"DUMMY_______"}]
+
 google_home_list = [ "*.*.*.*", "*.*.*.*" ]
 
 miner_stat = ''

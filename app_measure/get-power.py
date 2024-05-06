@@ -22,11 +22,8 @@ import jpholiday
 import threading
 import os
 import csv
-from gtts import gTTS
 import zeroconf
 import pychromecast
-
-import tinytuya
 
 # [START iot_http_includes]
 import base64
@@ -37,6 +34,13 @@ from google.api_core import retry
 import jwt
 import requests
 # [END iot_http_includes]
+
+import json
+import time
+import hashlib
+import hmac
+import base64
+import uuid
 
 
 # global variables.
@@ -55,6 +59,7 @@ jwt_iat = None
 jwt_exp_mins = 15
 
 last_instant_sent = None
+last_switchbot_sent = None
 
        
 def try_resend():
@@ -188,24 +193,78 @@ def send_message(json_body):
     return resp
 
 
+def create_switchbot_token():
+    # Declare empty header dictionary
+    apiHeader = {}
+    # open token
+    token = sb_clientid 
+    # secret key
+    secret = sb_clientsecret 
+    nonce = uuid.uuid4()
+    t = int(round(time.time() * 1000))
+    string_to_sign = '{}{}{}'.format(token, t, nonce)
+
+    string_to_sign = bytes(string_to_sign, 'utf-8')
+    secret = bytes(secret, 'utf-8')
+
+    sign = base64.b64encode(hmac.new(secret, msg=string_to_sign, digestmod=hashlib.sha256).digest())
+    logger.info('Authorization: {}'.format(token))
+    logger.info('t: {}'.format(t))
+    logger.info('sign: {}'.format(str(sign, 'utf-8')))
+    logger.info('nonce: {}'.format(nonce))
+
+    #Build api header JSON
+    apiHeader['Authorization']=token
+    apiHeader['Content-Type']='application/json'
+    apiHeader['charset']='utf8'
+    apiHeader['t']=str(t)
+    apiHeader['sign']=str(sign, 'utf-8')
+    apiHeader['nonce']=str(nonce)
+
+    logger.info("apiHeader")
+    logger.info(apiHeader)
+
+    return apiHeader
+
+
+
+@retry.Retry(
+    predicate=retry.if_exception_type(AssertionError),
+    deadline=_BACKOFF_DURATION)
+def get_request(url, headers):
+
+    response = requests.get(url, headers=headers)
+    logger.info(response)
+    logger.info(response.json())
+
+    if (response.status_code != 200 and response.status_code != 401):
+        logger.warning('Response came back {}, retrying'.format(response.status_code))
+        raise AssertionError('Not OK response: {}'.format(response.status_code))
+
+    return response
+
+
 def get_plug_power() :
     plug_status_body = {}
 
     for item in plug_mapping :
         logger.info('getting plug data from {}'.format(item['label']))
 
-        d = tinytuya.OutletDevice(item['dev_id'], item['address'], item['local_key'])
-        d.set_version(3.3)
-        try:
-            data = d.status()
-            # Show status of first controlled switch on device
-            logger.info('Dictionary {}'.format(data))
-            logger.info('State (bool, true is ON) {}'.format(data['dps']['1']))  
-            logger.info('Power {}'.format(float(data['dps']['19'])/10.0))
+        url = "https://api.switch-bot.com/v1.1/devices/{}/status".format(item['deviceId'])
+        headers = create_switchbot_token()
 
-            plug_status_body[item['label']] = (float(data['dps']['19'])/10.0)
+        try:
+            response = get_request(url, headers)
+            body = response.json()["body"]
+            logger.info(json.dumps(body, indent=4))
+
+            try :
+                plug_status_body[item['label']] = (float(body['weight']))
+            except Exception as e:
+                logger.warning('illegal format')
+
         except Exception as e:
-            logger.error('d.status failed:{}'.format(e))
+            logger.error('request failed:{}'.format(e))
 
     return plug_status_body
 
@@ -266,33 +325,33 @@ def get_price_unit(check_date):
     return 32.65, "life time", check_time
 
 
-def get_tempoerature():
-    url = "https://api.nature.global/1/devices"
-    headers = {"Content-Type": "application/json", "X-Requested-With":"python", "accept": "application/json", "Expect":"",
-    "Authorization": 'Bearer {}'.format(remo_token)}
+def get_hub_data():
 
-    temp_data_body = {}
+    hub_data_body = {}
 
-    try :
-        resp = requests.get(url, headers=headers, timeout=3.5)
-        logger.info(resp)
-        if(resp.status_code == 200) :
-            data_list = resp.json()
-            logger.info(json.dumps(data_list, indent=4))
-            for item in data_list :
-                mac_address = item["mac_address"]
-                label = ""
-                try :
-                    label = temp_mapping[mac_address]
-                    temp_data_body['TEMPERATURE_{}'.format(label)] = item["newest_events"]["te"]["val"]
-                except Exception as e:
-                    logger.warning('{} is not in temp mapping:{}'.format(mac_address, e))
+    for item in hub_mapping :
+        logger.info('getting hub data from {}'.format(item['label']))
 
-    except Exception as e:
-        logger.warning("temperature timeout. {}".format(e))
+        url = "https://api.switch-bot.com/v1.1/devices/{}/status".format(item['deviceId'])
+        headers = create_switchbot_token()
 
-    logger.info(temp_data_body)
-    return temp_data_body
+        try:
+            response = get_request(url, headers)
+            body = response.json()["body"]
+            logger.info(json.dumps(body, indent=4))
+
+            try :
+                hub_data_body['TEMPERATURE_{}'.format(item['label'])] = float(body["temperature"])
+                hub_data_body['HUMIDITY_{}'.format(item['label'])] = float(body["humidity"])
+                hub_data_body['LIGHT_LEVEL_{}'.format(item['label'])] = int(body["lightLevel"])
+            except Exception as e:
+                logger.warning('illegal format')
+
+        except Exception as e:
+            logger.error('request failed:{}'.format(e))
+
+    logger.info(hub_data_body)
+    return hub_data_body
 
 
 def get_mining_status() :
@@ -394,15 +453,17 @@ def parthE7(EDT) :
     data_body["DATETIME"] = datetime_str
     data_body["DATE"] = date_str
 
-
-    temp_body = get_tempoerature()
-    data_body.update(temp_body)
-
     temp_body = get_mining_status()
     data_body.update(temp_body)
 
-    temp_body = get_plug_power()
-    data_body.update(temp_body)
+    global last_switchbot_sent
+    if (last_switchbot_sent is None) or ((time_stamp - last_switchbot_sent) > datetime.timedelta(minutes=1)) :
+        hub_body = get_hub_data()
+        data_body.update(hub_body)
+
+        temp_body = get_plug_power()
+        data_body.update(temp_body)
+        last_switchbot_sent = time_stamp
 
     json_body = data_body
    

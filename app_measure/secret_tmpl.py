@@ -4,6 +4,10 @@
 # Bルート認証ID（東京電力パワーグリッドから郵送で送られてくるヤツ）
 rbid  = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 # Bルート認証パスワード（東京電力パワーグリッドからメールで送られてくるヤツ）
+
 rbpwd = "XXXXXXXXXXXX"
-# NatureRemo token
-remo_token = ""
+# Switchbot ClientID
+sb_clientid = "" 
+
+# Switchbot ClientSecret
+sb_clientsecret = ""
