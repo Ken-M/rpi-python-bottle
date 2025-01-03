@@ -41,6 +41,7 @@ import hashlib
 import hmac
 import base64
 import uuid
+import redis
 
 
 # global variables.
@@ -61,7 +62,11 @@ jwt_exp_mins = 15
 last_instant_sent = None
 last_switchbot_sent = None
 
-latest_instant_val = None
+latest_instant_val = {}
+
+# Redisクライアントのセットアップ
+redis_client = redis.StrictRedis(host='redis', port=6379, decode_responses=True)
+
 
        
 def try_resend():
@@ -494,7 +499,11 @@ def parthE7(EDT) :
   
     data = send_message(json_body)
 
+    global latest_instant_val
     latest_instant_val = {**latest_instant_val, **json_body}
+
+    logger.info("merged json:{}".format(json.dumps(latest_instant_val)))
+    redis_client.set('my_key', json.dumps(latest_instant_val))
 
     last_instant_sent = time_stamp
    

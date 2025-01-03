@@ -121,6 +121,7 @@ RUN pip3 install --ignore-installed six
 RUN pip3 install grpcio
 RUN pip3 install cryptography
 RUN pip3 install pip-review
+RUN pip3 install redis
 RUN pip-review --auto               
 
 # ユーザ作成
