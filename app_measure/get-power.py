@@ -61,6 +61,8 @@ jwt_exp_mins = 15
 last_instant_sent = None
 last_switchbot_sent = None
 
+latest_instant_val = None
+
        
 def try_resend():
     global jwt_token
@@ -268,6 +270,23 @@ def get_plug_power() :
 
     return plug_status_body
 
+def get_sb_device_list() :
+
+    logger.info('getting switch bot device list')
+
+    url = "https://api.switch-bot.com/v1.1/devices"
+    headers = create_switchbot_token()
+
+    try:
+        response = get_request(url, headers)
+        body = response.json()["body"]
+        logger.info(json.dumps(body, indent=4))
+
+    except Exception as e:
+        logger.error('request failed:{}'.format(e))
+
+    return 
+
 
 def isHoliday(check_date):
     if(check_date.weekday() >= 5) :
@@ -341,9 +360,12 @@ def get_hub_data():
             logger.info(json.dumps(body, indent=4))
 
             try :
-                hub_data_body['TEMPERATURE_{}'.format(item['label'])] = float(body["temperature"])
-                hub_data_body['HUMIDITY_{}'.format(item['label'])] = float(body["humidity"])
-                hub_data_body['LIGHT_LEVEL_{}'.format(item['label'])] = int(body["lightLevel"])
+                if(body["deviceType"]=="Hub 2"):
+                    hub_data_body['LIGHT_LEVEL_{}'.format(item['label'])] = int(body["lightLevel"])
+                else:
+                    hub_data_body['TEMPERATURE_{}'.format(item['label'])] = float(body["temperature"])
+                    hub_data_body['HUMIDITY_{}'.format(item['label'])] = float(body["humidity"])
+                    hub_data_body['CO2_{}'.format(item['label'])] = int(body["CO2"])
             except Exception as e:
                 logger.warning('illegal format')
 
@@ -437,7 +459,7 @@ def parthE7(EDT) :
     body = "瞬時電力:"+str(intPower)+"[W]"
     body = body + "(" + datetime_str + ")"
 
-    if intPower > 3800:
+    if intPower > 4800:
         speak_string = "瞬時電力が"+str(intPower)+"ワットです。"
         speak(speak_string)
 
@@ -471,6 +493,9 @@ def parthE7(EDT) :
     logger.info(json.dumps(json_body))
   
     data = send_message(json_body)
+
+    latest_instant_val = {**latest_instant_val, **json_body}
+
     last_instant_sent = time_stamp
    
 
@@ -746,6 +771,7 @@ if __name__ == '__main__':
     logging.basicConfig(level=10, format=fmt)
 
     logger.info("STARTING...")
+    get_sb_device_list()
 
     # シリアルポートデバイス名
     serialPortDev = '/dev/ttyUSB0'  # Linux(ラズパイなど）の場合

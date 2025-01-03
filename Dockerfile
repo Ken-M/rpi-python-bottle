@@ -54,9 +54,9 @@ RUN apt-get autoremove
 
 # Python3をインストール
 WORKDIR /
-RUN wget https://www.python.org/ftp/python/3.12.3/Python-3.12.3.tar.xz
-RUN tar xvf Python-3.12.3.tar.xz
-WORKDIR Python-3.12.3
+RUN wget https://www.python.org/ftp/python/3.13.1/Python-3.13.1.tar.xz
+RUN tar xvf Python-3.13.1.tar.xz
+WORKDIR Python-3.13.1
 #RUN ./configure --enable-optimizations --with-openssl=/usr/local/ssl --with-openssl-rpath=auto && make && make install
 RUN ./configure --enable-optimizations && make && make install
 
