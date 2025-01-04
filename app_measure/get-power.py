@@ -62,7 +62,7 @@ jwt_exp_mins = 15
 last_instant_sent = None
 last_switchbot_sent = None
 
-latest_instant_val = {}
+latest_instant_val = None
 
 # Redisクライアントのセットアップ
 redis_client = redis.StrictRedis(host='redis', port=6379, decode_responses=True)
@@ -500,7 +500,11 @@ def parthE7(EDT) :
     data = send_message(json_body)
 
     global latest_instant_val
-    latest_instant_val = {**latest_instant_val, **json_body}
+    if latest_instant_val is None:
+        latest_instant_val = {key: {"value": value, "updated_at": datetime_str} for key, value in json_body.items()}
+    else:
+        for key, value in json_body.items():
+            latest_instant_val[key] = {"value": value, "updated_at": datetime_str}
 
     logger.info("merged json:{}".format(json.dumps(latest_instant_val)))
     redis_client.set('my_key', json.dumps(latest_instant_val))
