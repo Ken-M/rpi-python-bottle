@@ -12,7 +12,7 @@ services:
   measure-application:
       container_name: rpi-python-bottle-app-measure
       image: kenonemorita/rpi-python-bottle-app-measure
-      build: ./app_measure
+      # build: ./app_measure
       depends_on:
         - redis
       tty: false
@@ -45,6 +45,11 @@ services:
       container_name: my_flask_app
       depends_on:
         - redis
+      volumes:
+       - ./my_flask_app:/app
+      entrypoint:
+       - /usr/local/bin/python3
+       - /app/my_flask_app.py
       ports:
         - "5000:5000"  # Flask用のポートを公開
       networks:

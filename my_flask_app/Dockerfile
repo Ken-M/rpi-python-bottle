@@ -1,9 +1,10 @@
 FROM python:3.9-slim
 
+USER root
+RUN apt-get update
+RUN apt-get upgrade -y
 WORKDIR /app
 
-COPY my_flask_app.py /app
-
-RUN pip install redis flask
-
-CMD ["python", "my_flask_app.py"]
+RUN pip3 install redis flask
+RUN pip3 install pip-review
+RUN pip-review --auto    
