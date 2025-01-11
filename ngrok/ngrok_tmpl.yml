@@ -1,0 +1,10 @@
+version: 3
+
+agent:
+  authtoken: hogehoge
+
+endpoints:
+  - name: your_name
+    url: your_url
+    upstream:
+      url: my_flask_app:5000
