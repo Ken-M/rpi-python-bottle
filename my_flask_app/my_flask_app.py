@@ -1,8 +1,18 @@
-from flask import Flask, jsonify, Response, render_template_string, json
+from flask import Flask, jsonify, Response, render_template_string, json, request
+from flask_httpauth import HTTPBasicAuth
 import redis
 from datetime import datetime, timedelta
+from my_flask_app_secret import USER_DATA
 
+auth = HTTPBasicAuth()
 app = Flask(__name__)
+
+
+@auth.verify_password
+def verify(username, password):
+    if not (username and password):
+        return False
+    return USER_DATA.get(username) == password
 
 # Redisクライアントのセットアップ
 redis_client = redis.StrictRedis(host='redis', port=6379, decode_responses=True)
@@ -23,6 +33,7 @@ def get_redis_data():
     except Exception as e:
         app.logger.error(f"Error accessing Redis: {e}")
         return None
+
 
 def validate_power_data(data):
     """
@@ -45,6 +56,7 @@ def validate_power_data(data):
     return True
 
 @app.route('/get_data', methods=['GET'])
+@auth.login_required
 def get_data():
     """
     Redisからデータを取得し、HTML形式で表示するエンドポイント。

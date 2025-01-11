@@ -3,3 +3,5 @@ rsa_private.pem
 secret.py
 secret.pyc
 environment.py
+my_flask_app/my_flask_app_secret.py
+ngrok/ngrok.yml
