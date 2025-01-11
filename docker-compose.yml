@@ -56,6 +56,22 @@ services:
         app_net:
           ipv4_address: 172.19.0.15  # 固定IPアドレスを割り当てる
 
+  ngrok:
+    image: ngrok/ngrok:latest
+    restart: unless-stopped
+    command:
+      - "start"
+      - "--all"
+      - "--config"
+      - "/etc/ngrok.yml"
+    ports:
+      - 4040:4040
+    volumes:
+      - ./ngrok.yml:/etc/ngrok.yml
+    networks:
+      app_net:
+        ipv4_address: 172.19.0.20
+
 networks:
   app_net:
     driver: bridge
