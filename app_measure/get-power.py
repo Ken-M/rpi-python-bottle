@@ -484,7 +484,7 @@ def parthE7(EDT) :
     data_body.update(temp_body)
 
     global last_switchbot_sent
-    if (last_switchbot_sent is None) or ((time_stamp - last_switchbot_sent) > datetime.timedelta(minutes=1)) :
+    if (last_switchbot_sent is None) or ((time_stamp - last_switchbot_sent) > datetime.timedelta(minutes=2)) :
         hub_body = get_hub_data()
         data_body.update(hub_body)
 
@@ -501,10 +501,10 @@ def parthE7(EDT) :
 
     global latest_instant_val
     if latest_instant_val is None:
-        latest_instant_val = {key: {"value": value, "updated_at": datetime_str} for key, value in json_body.items()}
+        latest_instant_val = {key: {"value": value, "updated_at": datetime_str + "+0900"} for key, value in json_body.items()}
     else:
         for key, value in json_body.items():
-            latest_instant_val[key] = {"value": value, "updated_at": datetime_str}
+            latest_instant_val[key] = {"value": value, "updated_at": datetime_str + "+0900"}
 
     logger.info("merged json:{}".format(json.dumps(latest_instant_val)))
     redis_client.set('my_key', json.dumps(latest_instant_val))
