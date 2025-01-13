@@ -55,13 +55,21 @@ def validate_power_data(data):
 
     return True
 
+def ip_based_authentication(f):
+    def decorated_function(*args, **kwargs):
+        client_ip = request.remote_addr
+        app.logger.info(f"Request IP: {client_ip}")
+        if client_ip == '172.19.0.20':
+            app.logger.info("Applying basic authentication")
+            return auth.login_required(f)(*args, **kwargs)
+        return f(*args, **kwargs)
+    return decorated_function
+
 @app.route('/get_data', methods=['GET'])
-@auth.login_required
+@ip_based_authentication
 def get_data():
-    """
-    Redisからデータを取得し、HTML形式で表示するエンドポイント。
-    """
     try:
+        client_ip = request.remote_addr
         data = get_redis_data()
         if data is None:
             return "No data found", 404
@@ -80,7 +88,7 @@ def get_data():
         <!DOCTYPE html>
         <html>
         <head>
-            <title>JSON Data Table</title>
+            <title>Home Dashboard</title>
             <style>
                 table {
                     width: 100%;
@@ -114,8 +122,9 @@ def get_data():
             </style>
         </head>
         <body>
-            <h1>JSON Data Table</h1>
+            <h1>Home Dashboard</h1>
             <p>Reload in <span id="countdown">30</span> seconds</p>
+            <p>Your IP: {{ client_ip }}</p>
             <p>Last reload: <span id="lastReload">Not yet</span></p>
             {% for group_name, keys in groups.items() %}
             <h2>{{ group_name }}</h2>
@@ -186,7 +195,7 @@ def get_data():
         </body>
         </html>
         """
-        return render_template_string(html_template, data=data, groups=groups)
+        return render_template_string(html_template, data=data, groups=groups, client_ip=client_ip)
     except Exception as e:
         return f"Error: {str(e)}", 500
 
