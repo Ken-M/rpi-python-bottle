@@ -5,3 +5,6 @@ secret.pyc
 environment.py
 my_flask_app/my_flask_app_secret.py
 ngrok/ngrok.yml
+
+# Snyk Security Extension - AI Rules (auto-generated)
+.github/instructions/snyk_rules.instructions.md
