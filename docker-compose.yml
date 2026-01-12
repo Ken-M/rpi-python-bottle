@@ -8,11 +8,12 @@ services:
     networks:
       app_net:
         ipv4_address: 172.19.0.5
+    restart: always
 
   measure-application:
       container_name: rpi-python-bottle-app-measure
       image: kenonemorita/rpi-python-bottle-app-measure
-      # build: ./app_measure
+      #build: ./app_measure
       depends_on:
         - redis
       tty: false
@@ -55,6 +56,7 @@ services:
       networks:
         app_net:
           ipv4_address: 172.19.0.15  # 固定IPアドレスを割り当てる
+      restart: always
 
   ngrok:
     image: ngrok/ngrok:latest
