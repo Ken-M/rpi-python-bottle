@@ -13,7 +13,7 @@ services:
   measure-application:
       container_name: rpi-python-bottle-app-measure
       image: kenonemorita/rpi-python-bottle-app-measure
-      #build: ./app_measure
+      build: ./app_measure
       depends_on:
         - redis
       tty: false
@@ -21,6 +21,8 @@ services:
        - ./app_measure:/home/bottle/app
       environment:
         CODEIGNITER_ENV: development
+      group_add:
+       - "20"   # ホスト側 dialout GID（Raspberry Pi OS デフォルト）
       devices:
        - "/dev/ttyUSB0:/dev/ttyUSB0:rwm"
       entrypoint:

@@ -1,13 +1,10 @@
     # Pythonは公式イメージ
-    FROM --platform=linux/arm64 debian:bookworm
+    FROM --platform=linux/arm64 debian:trixie
 
     # 各ライブラリインストール
     # Pythonがパッケージ依存するものもインストール
     # Pythonプロフェッショナルプログラミング第2版P9より
     USER root
-
-    RUN echo "deb http://deb.debian.org/debian bookworm-backports main" \
-        > /etc/apt/sources.list.d/backports.list
 
     RUN apt update
     RUN apt upgrade -y
@@ -35,8 +32,8 @@
                         libffi-dev
                         # python-dev
 
-    RUN apt install -y build-essential libssl-dev libffi-dev \   
-    python3-dev pkg-config      
+    RUN apt install -y build-essential libssl-dev libffi-dev \
+    python3-dev pkg-config
     RUN apt -qy remove python3 python3-grpcio python3-grpc-tools
     RUN apt -qy autoremove
 
@@ -57,17 +54,15 @@
 
     # Python3をインストール
     WORKDIR /
-    RUN wget https://www.python.org/ftp/python/3.14.2/Python-3.14.2.tar.xz
-    RUN tar xvf Python-3.14.2.tar.xz
-    WORKDIR Python-3.14.2
+    RUN wget https://www.python.org/ftp/python/3.14.4/Python-3.14.4.tar.xz
+    RUN tar xvf Python-3.14.4.tar.xz
+    WORKDIR Python-3.14.4
     #RUN ./configure --enable-optimizations --with-openssl=/usr/local/ssl --with-openssl-rpath=auto && make && make install
     RUN ./configure --enable-optimizations && make && make install
 
     # pip3をインストール
     RUN pip3 install --upgrade pip
     RUN python3 -m pip install --upgrade pip setuptools wheel
-    RUN pip3 install pip-review
-    RUN pip-review --auto
 
     # rust
 
@@ -110,24 +105,25 @@
     # RUN apt-get install -y python3-grpc-tools
 
     # pipでインストール
-    RUN pip3 install wheel
-    RUN pip3 install pyserial
-    RUN pip3 install retry2
-    RUN pip3 install jpholiday
-    RUN pip3 install pycryptodome
-    RUN pip3 install requests
-    RUN pip3 install pyjwt
-    RUN pip3 install google-api-python-client
-    RUN pip3 install google-auth-httplib2
-    RUN pip3 install google-auth
-    RUN pip3 install pychromecast
-    RUN pip3 install --ignore-installed six
-    RUN pip3 install --use-pep517 grpcio
-    RUN pip3 install cryptography
-    RUN pip3 install pip-review
-    RUN pip3 install redis
+    RUN pip3 install \
+        wheel \
+        pyserial \
+        retry2 \
+        jpholiday \
+        pycryptodome \
+        requests \
+        pyjwt \
+        google-api-python-client \
+        google-auth-httplib2 \
+        google-auth \
+        pychromecast \
+        six \
+        grpcio \
+        cryptography \
+        pip-review \
+        redis
 
-    RUN pip-review --auto               
+    RUN pip-review --auto
 
     # ユーザ作成
     RUN groupadd web
@@ -138,4 +134,3 @@
     RUN usermod -a -G dialout bottle
     # RUN chmod 0666 /dev/ttyUSB0
     USER bottle
-
