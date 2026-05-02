@@ -115,18 +115,36 @@ def get_data():
             <title>Home Dashboard</title>
             <style>
                 :root {
-                    --bg: #0f1117;
-                    --surface: #1a1d27;
-                    --surface2: #22263a;
-                    --border: #2e3350;
-                    --text: #e2e8f0;
-                    --text-muted: #8892a4;
+                    --bg: #f4f6fb;
+                    --surface: #ffffff;
+                    --surface2: #eef0f6;
+                    --border: #d1d5e8;
+                    --text: #1e2235;
+                    --text-muted: #6470a0;
                     --accent: #6366f1;
-                    --accent-glow: rgba(99,102,241,0.15);
-                    --green: #22c55e;
-                    --amber: #f59e0b;
-                    --red: #ef4444;
-                    --red-glow: rgba(239,68,68,0.15);
+                    --accent-glow: rgba(99,102,241,0.12);
+                    --green: #16a34a;
+                    --amber: #d97706;
+                    --red: #dc2626;
+                    --red-glow: rgba(220,38,38,0.10);
+                    --heading-gradient: linear-gradient(135deg, #4f46e5, #6366f1);
+                }
+                @media (prefers-color-scheme: dark) {
+                    :root {
+                        --bg: #0f1117;
+                        --surface: #1a1d27;
+                        --surface2: #22263a;
+                        --border: #2e3350;
+                        --text: #e2e8f0;
+                        --text-muted: #8892a4;
+                        --accent: #6366f1;
+                        --accent-glow: rgba(99,102,241,0.15);
+                        --green: #22c55e;
+                        --amber: #f59e0b;
+                        --red: #ef4444;
+                        --red-glow: rgba(239,68,68,0.15);
+                        --heading-gradient: linear-gradient(135deg, #a5b4fc, #818cf8);
+                    }
                 }
                 * { box-sizing: border-box; margin: 0; padding: 0; }
                 body {
@@ -150,7 +168,7 @@ def get_data():
                     font-size: 1.6rem;
                     font-weight: 700;
                     letter-spacing: -0.02em;
-                    background: linear-gradient(135deg, #a5b4fc, #818cf8);
+                    background: var(--heading-gradient);
                     -webkit-background-clip: text;
                     -webkit-text-fill-color: transparent;
                     background-clip: text;
