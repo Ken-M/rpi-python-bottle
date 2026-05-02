@@ -1,10 +1,12 @@
-FROM python:3.12.12-slim
+FROM python:3.14-slim
 
 USER root
-RUN apt-get update
-RUN apt-get upgrade -y
+RUN apt-get update && \
+    apt-get upgrade -y --no-install-recommends && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
-RUN pip3 install redis flask Flask-HTTPAuth
-RUN pip3 install pip-review
-RUN pip-review --auto
+RUN pip3 install --no-cache-dir redis flask Flask-HTTPAuth pip-review && \
+    pip-review --auto
