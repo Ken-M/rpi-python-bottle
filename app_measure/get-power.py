@@ -687,7 +687,9 @@ def speak(speech_text):
 
     for googlehome in casts:
         try:
-            googlehome.wait(timeout=5)
+            if not googlehome.wait(timeout=5):
+                logger.warning("Chromecast did not connect within 5s, skipping")
+                continue
             mc = googlehome.media_controller
             mc.play_media(mp3url, 'audio/mp3')
 
