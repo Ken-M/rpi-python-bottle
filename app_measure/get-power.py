@@ -90,24 +90,23 @@ def try_resend():
 
     os.rename(app_path + 'failed_message.txt', app_path + 'failed_message_back.txt')
 
-    try:
-        with open(app_path + 'failed_message_back.txt', 'r') as file:
-            reader = csv.reader(file, delimiter='#')
-            for message in reader:
-                try:
-                    state.jwt_token = create_jwt()
-                    logger.info("RePublishing message: '{}'".format(message))
-                    resp = publish_message(json.loads(message[0]), state.jwt_token)
-                    if resp.status_code != requests.codes.ok:
-                        with open(app_path + 'failed_message.txt', 'a') as f:
-                            writer = csv.writer(f, delimiter='#')
-                            writer.writerow([message[0]])
-                except Exception as e:
-                    logger.error('Resend error: {}'.format(e))
+    with open(app_path + 'failed_message_back.txt', 'r') as file:
+        reader = csv.reader(file, delimiter='#')
+        for message in reader:
+            try:
+                state.jwt_token = create_jwt()
+                logger.info("RePublishing message: '{}'".format(message))
+                resp = publish_message(json.loads(message[0]), state.jwt_token)
+                if resp.status_code != requests.codes.ok:
                     with open(app_path + 'failed_message.txt', 'a') as f:
                         writer = csv.writer(f, delimiter='#')
                         writer.writerow([message[0]])
-                time.sleep(1)
+            except Exception as e:
+                logger.error('Resend error: {}'.format(e))
+                with open(app_path + 'failed_message.txt', 'a') as f:
+                    writer = csv.writer(f, delimiter='#')
+                    writer.writerow([message[0]])
+            time.sleep(1)
 
     logger.info('fin resend check')
 
