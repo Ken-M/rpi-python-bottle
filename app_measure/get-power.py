@@ -108,9 +108,6 @@ def try_resend():
                         writer = csv.writer(f, delimiter='#')
                         writer.writerow([message[0]])
                 time.sleep(1)
-    finally:
-        if os.path.isfile(app_path + 'failed_message_back.txt'):
-            os.remove(app_path + 'failed_message_back.txt')
 
     logger.info('fin resend check')
 
