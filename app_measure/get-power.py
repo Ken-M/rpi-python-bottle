@@ -11,115 +11,115 @@ from echonet import *
 from secret import *
 from gcp_environment import *
 
-import sys
-import serial
+import base64
+import csv
+import datetime
+import hashlib
+import hmac
+import json
 import logging
 import logging.handlers
 import locale
-import urllib.request
-import urllib.parse
-import jpholiday
-import threading
 import os
-import csv
-import zeroconf
-import pychromecast
-
-# [START iot_http_includes]
-import base64
-import datetime
-import json
+import sys
 import time
-from google.api_core import retry
-import jwt
-import requests
-# [END iot_http_includes]
-
-import json
-import time
-import hashlib
-import hmac
-import base64
+import threading
+import urllib.parse
+import urllib.request
 import uuid
+import zeroconf
+from dataclasses import dataclass
+from typing import Optional
+
+import jpholiday
+import jwt
+import pychromecast
 import redis
+import requests
+import serial
+from google.api_core import retry
 
 
-# global variables.
 _BACKOFF_DURATION = 10
 _DATETIME_FORMAT = '%Y-%m-%d %H:%M:%S'
-_DATETIME_FORMAT_TZ =  '%Y-%m-%dT%H:%M:%S%z'
-_DATE_FORMAT = '%Y-%m-%d' 
-
-coeff = 1
-unit = 0.1
-failure_count = 0
+_DATETIME_FORMAT_TZ = '%Y-%m-%dT%H:%M:%S%z'
+_DATE_FORMAT = '%Y-%m-%d'
 _MAX_FAILURE_COUNT = 5
+_JWT_EXP_MINS = 15
 
-jwt_token = ""
-jwt_iat = None
-jwt_exp_mins = 15
 
-last_instant_sent = None
-last_switchbot_sent = None
+@dataclass
+class State:
+    coeff: int = 1
+    unit: float = 0.1
+    failure_count: int = 0
+    jwt_token: str = ""
+    jwt_iat: Optional[datetime.datetime] = None
+    last_instant_sent: Optional[datetime.datetime] = None
+    last_switchbot_sent: Optional[datetime.datetime] = None
+    latest_instant_val: Optional[dict] = None
 
-latest_instant_val = None
+
+state = State()
 
 # Redisクライアントのセットアップ
 redis_client = redis.StrictRedis(host='redis', port=6379, decode_responses=True)
 
+# Chromecastデバイス接続キャッシュ（speak()呼び出しごとの再スキャンを避ける）
+_cast_cache = None
 
-       
+
+def _get_chromecasts():
+    global _cast_cache
+    if _cast_cache is None:
+        logger.info("pychromecast: discovering devices")
+        casts, browser = pychromecast.get_chromecasts(known_hosts=google_home_list)
+        browser.stop_discovery()
+        _cast_cache = casts
+        logger.info("pychromecast: found {} device(s)".format(len(casts)))
+    return _cast_cache
+
+
 def try_resend():
-    global jwt_token
-
     logger.info('resend check')
 
-    if os.path.isfile(app_path+'failed_message.txt') : 
-
-        os.rename(app_path+'failed_message.txt', app_path+'failed_message_back.txt')
-
-        with open(app_path+'failed_message_back.txt', 'r') as file:
-            reader = csv.reader(file, delimiter='#')
-
-            for message in reader:
-                try: 
-                    jwt_token = create_jwt()
-                    logger.info('RePublishing message : \'{}\''.format(message))
-                    resp = publish_message(json.loads(message[0]), jwt_token)
-
-                    #On HTTP error , write message to file.
-                    if resp.status_code != requests.codes.ok:
-                        with open(app_path+'failed_message.txt', 'a') as f:
-                            writer = csv.writer(f, delimiter='#')
-                            writer.writerow([message[0]])
-                except Exception as e:
-                    logger.error('Resend error:{}'.format(e))
-                    with open(app_path+'failed_message.txt', 'a') as f:
-                        writer = csv.writer(f, delimiter='#')
-                        writer.writerow([message[0]])                     
-	
-                time.sleep(1) 
-
-        os.remove(app_path+'failed_message_back.txt')
-    else :
+    if not os.path.isfile(app_path + 'failed_message.txt'):
         logger.info('no failed file')
+        logger.info('fin resend check')
+        return
+
+    os.rename(app_path + 'failed_message.txt', app_path + 'failed_message_back.txt')
+
+    with open(app_path + 'failed_message_back.txt', 'r') as file:
+        reader = csv.reader(file, delimiter='#')
+        for message in reader:
+            try:
+                state.jwt_token = create_jwt()
+                logger.info("RePublishing message: '{}'".format(message))
+                resp = publish_message(json.loads(message[0]), state.jwt_token)
+                if resp.status_code != requests.codes.ok:
+                    with open(app_path + 'failed_message.txt', 'a') as f:
+                        writer = csv.writer(f, delimiter='#')
+                        writer.writerow([message[0]])
+            except Exception as e:
+                logger.error('Resend error: {}'.format(e))
+                with open(app_path + 'failed_message.txt', 'a') as f:
+                    writer = csv.writer(f, delimiter='#')
+                    writer.writerow([message[0]])
+            time.sleep(1)
 
     logger.info('fin resend check')
 
 
 def create_jwt():
-    global jwt_iat
-    global jwt_token  
-    temp_token = jwt_token
+    seconds_since_issue = 60 * _JWT_EXP_MINS
 
-    seconds_since_issue = 60 * jwt_exp_mins
+    if state.jwt_iat is not None:
+        seconds_since_issue = (datetime.datetime.now(datetime.UTC) - state.jwt_iat).seconds
 
-    if jwt_iat is not None:
-        seconds_since_issue = (datetime.datetime.now(datetime.UTC) - jwt_iat).seconds
-
-    if seconds_since_issue < 60 * jwt_exp_mins:
+    if seconds_since_issue < 60 * _JWT_EXP_MINS:
         logger.info('No need to refresh {}s'.format(seconds_since_issue))
-        return temp_token
+        return state.jwt_token
 
     head = {
         "alg": "RS256",
@@ -127,33 +127,30 @@ def create_jwt():
     }
 
     token = {
-            # The time the token was issued.
-            'iat': datetime.datetime.now(datetime.UTC),
-            # Token expiration time.
-            'exp': datetime.datetime.now(datetime.UTC) + datetime.timedelta(minutes=60),
-            'iss': sa_email,
-            'aud': 'https://www.googleapis.com/oauth2/v4/token',
-            'sub': sa_email,
-            'target_audience':audience
+        'iat': datetime.datetime.now(datetime.UTC),
+        'exp': datetime.datetime.now(datetime.UTC) + datetime.timedelta(minutes=60),
+        'iss': sa_email,
+        'aud': 'https://www.googleapis.com/oauth2/v4/token',
+        'sub': sa_email,
+        'target_audience': audience
     }
 
     temp_jwt = jwt.encode(token, key, algorithm=algorithm, headers=head)
 
     headers = {
-            'authorization': 'Bearer {}'.format(temp_jwt),
-            'content-type': 'application/x-www-form-urlencoded'
+        'authorization': 'Bearer {}'.format(temp_jwt),
+        'content-type': 'application/x-www-form-urlencoded'
     }
 
     message = 'grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion={}'.format(temp_jwt)
 
-    resp = requests.post(
-            auth_api, data=message, headers=headers, timeout=3.5)
+    resp = requests.post(auth_api, data=message, headers=headers, timeout=3.5)
     logger.info("auth_token:")
     logger.info(resp.json())
 
     if resp.status_code == requests.codes.ok:
-        jwt_iat = datetime.datetime.now(datetime.UTC)
-        logger.info('token refresh {}s'.format(jwt_iat))
+        state.jwt_iat = datetime.datetime.now(datetime.UTC)
+        logger.info('token refresh {}s'.format(state.jwt_iat))
 
     return resp.json()['id_token']
 
@@ -161,39 +158,35 @@ def create_jwt():
 @retry.Retry(
     predicate=retry.if_exception_type(AssertionError),
     deadline=_BACKOFF_DURATION)
-def publish_message(
-        json_body, jwt_token):
+def publish_message(json_body, jwt_token):
     headers = {
-            'authorization': 'Bearer {}'.format(jwt_token),
-            'content-type': 'application/json',
-            'cache-control': 'no-cache'
+        'authorization': 'Bearer {}'.format(jwt_token),
+        'content-type': 'application/json',
+        'cache-control': 'no-cache'
     }
 
     logger.info("trig. cloud function.")
-    # logger.info(headers)
     logger.info(json.dumps(json_body))
-    resp = requests.post(
-            audience, json=json_body, headers=headers, timeout=3.5)
+    resp = requests.post(audience, json=json_body, headers=headers, timeout=3.5)
 
-    if (resp.status_code != 200):
+    if resp.status_code != 200:
         logger.warning('Response came back {}, retrying'.format(resp.status_code))
         raise AssertionError('Not OK response: {}'.format(resp.status_code))
 
     return resp
 
+
 def send_message(json_body):
-    global jwt_token
     resp = requests.Response()
 
-    try: 
-        jwt_token = create_jwt()
-        resp = publish_message(json_body, jwt_token)
+    try:
+        state.jwt_token = create_jwt()
+        resp = publish_message(json_body, state.jwt_token)
         try_resend()
 
     except Exception as e:
-        logger.exception('Message send error:{}'.format(e))
-    
-        with open(app_path+'failed_message.txt', 'a') as f:
+        logger.exception('Message send error: {}'.format(e))
+        with open(app_path + 'failed_message.txt', 'a') as f:
             writer = csv.writer(f, delimiter='#')
             writer.writerow([json.dumps(json_body)])
 
@@ -201,82 +194,73 @@ def send_message(json_body):
 
 
 def create_switchbot_token():
-    # Declare empty header dictionary
-    apiHeader = {}
-    # open token
-    token = sb_clientid 
-    # secret key
-    secret = sb_clientsecret 
+    token = sb_clientid
+    secret = sb_clientsecret
     nonce = uuid.uuid4()
     t = int(round(time.time() * 1000))
-    string_to_sign = '{}{}{}'.format(token, t, nonce)
+    string_to_sign = bytes('{}{}{}'.format(token, t, nonce), 'utf-8')
+    secret_bytes = bytes(secret, 'utf-8')
 
-    string_to_sign = bytes(string_to_sign, 'utf-8')
-    secret = bytes(secret, 'utf-8')
+    sign = base64.b64encode(
+        hmac.new(secret_bytes, msg=string_to_sign, digestmod=hashlib.sha256).digest()
+    )
 
-    sign = base64.b64encode(hmac.new(secret, msg=string_to_sign, digestmod=hashlib.sha256).digest())
-    logger.info('Authorization: {}'.format(token))
-    logger.info('t: {}'.format(t))
-    logger.info('sign: {}'.format(str(sign, 'utf-8')))
-    logger.info('nonce: {}'.format(nonce))
+    api_header = {
+        'Authorization': token,
+        'Content-Type': 'application/json',
+        'charset': 'utf8',
+        't': str(t),
+        'sign': str(sign, 'utf-8'),
+        'nonce': str(nonce),
+    }
 
-    #Build api header JSON
-    apiHeader['Authorization']=token
-    apiHeader['Content-Type']='application/json'
-    apiHeader['charset']='utf8'
-    apiHeader['t']=str(t)
-    apiHeader['sign']=str(sign, 'utf-8')
-    apiHeader['nonce']=str(nonce)
-
-    logger.info("apiHeader")
-    logger.info(apiHeader)
-
-    return apiHeader
-
+    logger.info("apiHeader: {}".format(api_header))
+    return api_header
 
 
 @retry.Retry(
     predicate=retry.if_exception_type(AssertionError),
     deadline=_BACKOFF_DURATION)
 def get_request(url, headers):
-
     response = requests.get(url, headers=headers)
     logger.info(response)
     logger.info(response.json())
 
-    if (response.status_code != 200 and response.status_code != 401):
+    if response.status_code != 200 and response.status_code != 401:
         logger.warning('Response came back {}, retrying'.format(response.status_code))
         raise AssertionError('Not OK response: {}'.format(response.status_code))
 
     return response
 
 
-def get_plug_power() :
+def _get_switchbot_device_body(device_id):
+    """SwitchBot API からデバイスステータスの body を取得する共通ヘルパー。"""
+    url = "https://api.switch-bot.com/v1.1/devices/{}/status".format(device_id)
+    headers = create_switchbot_token()
+    response = get_request(url, headers)
+    body = response.json()["body"]
+    logger.info(json.dumps(body, indent=4))
+    return body
+
+
+def get_plug_power():
     plug_status_body = {}
 
-    for item in plug_mapping :
+    for item in plug_mapping:
         logger.info('getting plug data from {}'.format(item['label']))
-
-        url = "https://api.switch-bot.com/v1.1/devices/{}/status".format(item['deviceId'])
-        headers = create_switchbot_token()
-
         try:
-            response = get_request(url, headers)
-            body = response.json()["body"]
-            logger.info(json.dumps(body, indent=4))
-
-            try :
-                plug_status_body[item['label']] = (float(body['weight']))
-            except Exception as e:
+            body = _get_switchbot_device_body(item['deviceId'])
+            try:
+                plug_status_body[item['label']] = float(body['weight'])
+            except Exception:
                 logger.warning('illegal format')
-
         except Exception as e:
-            logger.error('request failed:{}'.format(e))
+            logger.error('request failed: {}'.format(e))
 
     return plug_status_body
 
-def get_sb_device_list() :
 
+def get_sb_device_list():
     logger.info('getting switch bot device list')
 
     url = "https://api.switch-bot.com/v1.1/devices"
@@ -286,31 +270,22 @@ def get_sb_device_list() :
         response = get_request(url, headers)
         body = response.json()["body"]
         logger.info(json.dumps(body, indent=4))
-
     except Exception as e:
-        logger.error('request failed:{}'.format(e))
-
-    return 
+        logger.error('request failed: {}'.format(e))
 
 
 def isHoliday(check_date):
-    if(check_date.weekday() >= 5) :
+    if check_date.weekday() >= 5:
         return True
-    if( jpholiday.is_holiday(check_date.date()) == True) :
+    if jpholiday.is_holiday(check_date.date()):
         return True
-    if( (check_date.month == 1) and (check_date.day == 2) ):
+    if check_date.month == 1 and check_date.day in (2, 3):
         return True
-    if( (check_date.month == 1) and (check_date.day == 3) ):
-        return True       
-    if( (check_date.month == 4) and (check_date.day == 30) ):
+    if check_date.month == 4 and check_date.day == 30:
         return True
-    if( (check_date.month == 5) and (check_date.day == 1) ):
+    if check_date.month == 5 and check_date.day in (1, 2):
         return True
-    if( (check_date.month == 5) and (check_date.day == 2) ):
-        return True
-    if( (check_date.month == 12) and (check_date.day == 30) ):
-        return True
-    if( (check_date.month == 12) and (check_date.day == 31) ):
+    if check_date.month == 12 and check_date.day in (30, 31):
         return True
     return False
 
@@ -323,66 +298,58 @@ def get_price_unit(check_date):
     logger.info(check_date.weekday())
     logger.info(jpholiday.is_holiday(check_date.date()))
 
-    check_time_yesterday = check_time - datetime.timedelta(days=1)    
+    check_time_yesterday = check_time - datetime.timedelta(days=1)
 
-    if( isHoliday(check_time) == True ) :
-        if (datetime.time(hour=22,minute=00,second=00, tzinfo=JST) <= check_time.timetz()) :
+    if isHoliday(check_time):
+        if datetime.time(hour=22, minute=0, second=0, tzinfo=JST) <= check_time.timetz():
             return 22.98, "night time", check_time
-    if( isHoliday(check_time_yesterday) == True) :
-        if (check_time.timetz() < datetime.time(hour=8,minute=00,second=00, tzinfo=JST)) :
-            return 22.98, "night time", check_time
-
-    if( isHoliday(check_time) == False ) :
-        if (datetime.time(hour=23,minute=00,second=00, tzinfo=JST) <= check_time.timetz()) :
-            return 22.98, "night time", check_time
-    if( isHoliday(check_time_yesterday) == False) :
-        if (check_time.timetz() < datetime.time(hour=6,minute=00,second=00, tzinfo=JST)) :
+    if isHoliday(check_time_yesterday):
+        if check_time.timetz() < datetime.time(hour=8, minute=0, second=0, tzinfo=JST):
             return 22.98, "night time", check_time
 
-    if( isHoliday(check_time) == False ) :
-        if((datetime.time(hour=9,minute=00,second=00, tzinfo=JST) <= check_time.timetz()) and (check_time.timetz() < datetime.time(hour=16,minute=00,second=00, tzinfo=JST))) :
+    if not isHoliday(check_time):
+        if datetime.time(hour=23, minute=0, second=0, tzinfo=JST) <= check_time.timetz():
+            return 22.98, "night time", check_time
+    if not isHoliday(check_time_yesterday):
+        if check_time.timetz() < datetime.time(hour=6, minute=0, second=0, tzinfo=JST):
+            return 22.98, "night time", check_time
+
+    if not isHoliday(check_time):
+        if (datetime.time(hour=9, minute=0, second=0, tzinfo=JST) <= check_time.timetz() <
+                datetime.time(hour=16, minute=0, second=0, tzinfo=JST)):
             return 20.05, "day time", check_time
     else:
-        if((datetime.time(hour=8,minute=00,second=00, tzinfo=JST) <= check_time.timetz()) and (check_time.timetz() < datetime.time(hour=22,minute=00,second=00, tzinfo=JST))) :
+        if (datetime.time(hour=8, minute=0, second=0, tzinfo=JST) <= check_time.timetz() <
+                datetime.time(hour=22, minute=0, second=0, tzinfo=JST)):
             return 20.05, "day time", check_time
 
     return 32.65, "life time", check_time
 
 
 def get_hub_data():
-
     hub_data_body = {}
 
-    for item in hub_mapping :
+    for item in hub_mapping:
         logger.info('getting hub data from {}'.format(item['label']))
-
-        url = "https://api.switch-bot.com/v1.1/devices/{}/status".format(item['deviceId'])
-        headers = create_switchbot_token()
-
         try:
-            response = get_request(url, headers)
-            body = response.json()["body"]
-            logger.info(json.dumps(body, indent=4))
-
-            try :
-                if(body["deviceType"]=="Hub 2"):
+            body = _get_switchbot_device_body(item['deviceId'])
+            try:
+                if body["deviceType"] == "Hub 2":
                     hub_data_body['LIGHT_LEVEL_{}'.format(item['label'])] = int(body["lightLevel"])
                 else:
                     hub_data_body['TEMPERATURE_{}'.format(item['label'])] = float(body["temperature"])
                     hub_data_body['HUMIDITY_{}'.format(item['label'])] = float(body["humidity"])
                     hub_data_body['CO2_{}'.format(item['label'])] = int(body["CO2"])
-            except Exception as e:
+            except Exception:
                 logger.warning('illegal format')
-
         except Exception as e:
-            logger.error('request failed:{}'.format(e))
+            logger.error('request failed: {}'.format(e))
 
     logger.info(hub_data_body)
     return hub_data_body
 
 
-def get_mining_status() :
-
+def get_mining_status():
     mining_status_body = {}
 
     total_hash_rate = 0
@@ -390,49 +357,49 @@ def get_mining_status() :
     total_profilt_par_day = 0
     total_power_usage = 0
 
-    try :
+    try:
         resp = requests.get(miner_stat, timeout=3.5)
         logger.info(resp)
 
-        if(resp.status_code == 200) :
+        if resp.status_code == 200:
             data_list = resp.json()
             logger.info(json.dumps(data_list, indent=4))
-            
-            for group in data_list["groupList"] :
-                for miner in group["minerList"] :
-                    name = miner["name"].upper() 
 
-                    mining_status_body[name+"_"+"POOL"] = miner["pool"]
-                    mining_status_body[name+"_"+"SOFTWARE"] = miner["softwareType"]
+            for group in data_list["groupList"]:
+                for miner in group["minerList"]:
+                    name = miner["name"].upper()
 
-                    if( miner["speedInfo"].get("hashrateValue") is not None) :
-                        mining_status_body[name+"_"+"HASHRATE"] = miner["speedInfo"]["hashrateValue"]
-                        total_hash_rate = total_hash_rate + miner["speedInfo"]["hashrateValue"]
+                    mining_status_body[name + "_POOL"] = miner["pool"]
+                    mining_status_body[name + "_SOFTWARE"] = miner["softwareType"]
 
-                    if( miner["coinInfo"].get("revenuePerDayValueDisplayCurrency") is not None) :
-                        mining_status_body[name+"_"+"REVENUE_PAR_DAY"] = miner["coinInfo"]["revenuePerDayValueDisplayCurrency"]
-                        total_revenue_par_day = total_revenue_par_day + miner["coinInfo"]["revenuePerDayValueDisplayCurrency"]
-                    elif( miner["coinInfo"].get("revenuePerDayValue") is not None) :
-                        mining_status_body[name+"_"+"REVENUE_PAR_DAY"] = miner["coinInfo"]["revenuePerDayValue"]
-                        total_revenue_par_day = total_revenue_par_day + miner["coinInfo"]["revenuePerDayValue"]
+                    if miner["speedInfo"].get("hashrateValue") is not None:
+                        mining_status_body[name + "_HASHRATE"] = miner["speedInfo"]["hashrateValue"]
+                        total_hash_rate += miner["speedInfo"]["hashrateValue"]
 
-                    mining_status_body[name+"_"+"PROFIT_PAR_DAY"] = miner["coinInfo"]["profitPerDayValue"]
-                    total_profilt_par_day = total_profilt_par_day + miner["coinInfo"]["profitPerDayValue"]
+                    if miner["coinInfo"].get("revenuePerDayValueDisplayCurrency") is not None:
+                        mining_status_body[name + "_REVENUE_PAR_DAY"] = miner["coinInfo"]["revenuePerDayValueDisplayCurrency"]
+                        total_revenue_par_day += miner["coinInfo"]["revenuePerDayValueDisplayCurrency"]
+                    elif miner["coinInfo"].get("revenuePerDayValue") is not None:
+                        mining_status_body[name + "_REVENUE_PAR_DAY"] = miner["coinInfo"]["revenuePerDayValue"]
+                        total_revenue_par_day += miner["coinInfo"]["revenuePerDayValue"]
 
-                    if( miner["coinInfo"].get("isActualPowerUsage") is not None) :
-                        mining_status_body[name+"_"+"POWER_USAGE"] = miner["coinInfo"]["powerUsageValue"]
-                        total_power_usage = total_power_usage + miner["coinInfo"]["powerUsageValue"]
+                    mining_status_body[name + "_PROFIT_PAR_DAY"] = miner["coinInfo"]["profitPerDayValue"]
+                    total_profilt_par_day += miner["coinInfo"]["profitPerDayValue"]
 
-                    if(miner["coinInfo"].get("algorithm") is not None) :
-                        mining_status_body[name+"_"+"ALGORITHM"] = miner["coinInfo"]["algorithm"]
+                    if miner["coinInfo"].get("isActualPowerUsage") is not None:
+                        mining_status_body[name + "_POWER_USAGE"] = miner["coinInfo"]["powerUsageValue"]
+                        total_power_usage += miner["coinInfo"]["powerUsageValue"]
 
-                    mining_status_body[name+"_"+"GPU_TEMPERATURE"] = miner["maxTemperatureValue"]
-            
+                    if miner["coinInfo"].get("algorithm") is not None:
+                        mining_status_body[name + "_ALGORITHM"] = miner["coinInfo"]["algorithm"]
+
+                    mining_status_body[name + "_GPU_TEMPERATURE"] = miner["maxTemperatureValue"]
+
             mining_status_body["TOTAL_HASHRATE"] = total_hash_rate
             mining_status_body["TOTAL_REVENUE_PAR_DAY"] = total_revenue_par_day
             mining_status_body["TOTAL_PROFIT_PAR_DAY"] = total_profilt_par_day
             mining_status_body["TOTAL_POWER_USAGE"] = total_power_usage
-                   
+
     except Exception as e:
         logger.warning("mining status timeout. {}".format(e))
 
@@ -440,18 +407,18 @@ def get_mining_status() :
     return mining_status_body
 
 
-def setCurrentElectricityPrice(timestamp) :
+def setCurrentElectricityPrice(timestamp):
     current_electricity_price = get_price_unit(timestamp)
     logger.info("Current electricity price: {}".format(current_electricity_price[0]))
-    query_string = "&value="+str(current_electricity_price[0])
-    try :
-        resp = requests.post(miner_set_electricity_price+query_string, timeout=3.5)
-        logger.info(resp) 
+    query_string = "&value=" + str(current_electricity_price[0])
+    try:
+        resp = requests.post(miner_set_electricity_price + query_string, timeout=3.5)
+        logger.info(resp)
     except Exception as e:
         logger.warning("setCurrentElectricityPrice failed. {}".format(e))
 
 
-def parthE7(EDT) :
+def parseE7(EDT):
     # 内容が瞬時電力計測値(E7)だったら
     hexPower = EDT[-8:]    # 最後の4バイト（16進数で8文字）が瞬時電力計測値
     intPower = int(hexPower, 16)
@@ -461,59 +428,55 @@ def parthE7(EDT) :
     datetime_str = time_stamp.strftime(_DATETIME_FORMAT)
     date_str = time_stamp.strftime(_DATE_FORMAT)
 
-    body = "瞬時電力:"+str(intPower)+"[W]"
+    body = "瞬時電力:" + str(intPower) + "[W]"
     body = body + "(" + datetime_str + ")"
 
     if intPower > 4800:
-        speak_string = "瞬時電力が"+str(intPower)+"ワットです。"
+        speak_string = "瞬時電力が" + str(intPower) + "ワットです。"
         speak(speak_string)
 
-    global last_instant_sent
-    if (last_instant_sent is not None) and ((time_stamp - last_instant_sent) < datetime.timedelta(seconds=15)) :
+    if (state.last_instant_sent is not None and
+            (time_stamp - state.last_instant_sent) < datetime.timedelta(seconds=15)):
         logger.info("check power only")
         return
 
-    data_body = {}
-    data_body["TYPE"] = "INSTANTANEOUS"
-    data_body["POWER"] = intPower
-    data_body["TIMESTAMP"] = str(time_stamp.timestamp())
-    data_body["DATETIME"] = datetime_str
-    data_body["DATE"] = date_str
+    data_body = {
+        "TYPE": "INSTANTANEOUS",
+        "POWER": intPower,
+        "TIMESTAMP": str(time_stamp.timestamp()),
+        "DATETIME": datetime_str,
+        "DATE": date_str,
+    }
 
-    temp_body = get_mining_status()
-    data_body.update(temp_body)
+    data_body.update(get_mining_status())
 
-    global last_switchbot_sent
-    if (last_switchbot_sent is None) or ((time_stamp - last_switchbot_sent) > datetime.timedelta(minutes=2)) :
-        hub_body = get_hub_data()
-        data_body.update(hub_body)
+    if (state.last_switchbot_sent is None or
+            (time_stamp - state.last_switchbot_sent) > datetime.timedelta(minutes=2)):
+        data_body.update(get_hub_data())
+        data_body.update(get_plug_power())
+        state.last_switchbot_sent = time_stamp
 
-        temp_body = get_plug_power()
-        data_body.update(temp_body)
-        last_switchbot_sent = time_stamp
-
-    json_body = data_body
-   
     logger.info(body)
-    logger.info(json.dumps(json_body))
-  
-    data = send_message(json_body)
+    logger.info(json.dumps(data_body))
 
-    global latest_instant_val
-    if latest_instant_val is None:
-        latest_instant_val = {key: {"value": value, "updated_at": datetime_str + "+0900"} for key, value in json_body.items()}
+    send_message(data_body)
+
+    if state.latest_instant_val is None:
+        state.latest_instant_val = {
+            key: {"value": value, "updated_at": datetime_str + "+0900"}
+            for key, value in data_body.items()
+        }
     else:
-        for key, value in json_body.items():
-            latest_instant_val[key] = {"value": value, "updated_at": datetime_str + "+0900"}
+        for key, value in data_body.items():
+            state.latest_instant_val[key] = {"value": value, "updated_at": datetime_str + "+0900"}
 
-    logger.info("merged json:{}".format(json.dumps(latest_instant_val)))
-    redis_client.set('my_key', json.dumps(latest_instant_val))
+    logger.info("merged json: {}".format(json.dumps(state.latest_instant_val)))
+    redis_client.set('my_key', json.dumps(state.latest_instant_val))
 
-    last_instant_sent = time_stamp
-   
+    state.last_instant_sent = time_stamp
 
 
-def parthEA(EDT) :
+def parseEA(EDT):
     hexYear    = EDT[-22:-22+4]
     hexMonth   = EDT[-18:-18+2]
     hexDay     = EDT[-16:-16+2]
@@ -523,260 +486,241 @@ def parthEA(EDT) :
     hexPower   = EDT[-8:]
 
     JST = datetime.timezone(datetime.timedelta(hours=+9), 'JST')
-    time_stamp = datetime.datetime(int(hexYear,16),
-                          int(hexMonth,16),
-                          int(hexDay,16),
-                          int(hexHour,16),
-                          int(hexMinutes,16),
-                          int(hexSeconds,16),
-                          tzinfo=JST)    
+    time_stamp = datetime.datetime(
+        int(hexYear, 16),
+        int(hexMonth, 16),
+        int(hexDay, 16),
+        int(hexHour, 16),
+        int(hexMinutes, 16),
+        int(hexSeconds, 16),
+        tzinfo=JST)
 
-    intPower = int(hexPower,16) * coeff * unit
+    intPower = int(hexPower, 16) * state.coeff * state.unit
     timestamp_str = time_stamp.strftime(_DATETIME_FORMAT)
     datetime_str = time_stamp.strftime(_DATETIME_FORMAT)
     date_str = time_stamp.strftime(_DATE_FORMAT)
-    
 
-    body = "積算電力:"+str(intPower)+"[kWh]"
+    body = "積算電力:" + str(intPower) + "[kWh]"
     body = body + "(" + timestamp_str + ")"
     logger.info(body)
 
-    last_json_data = {"TIMESTAMP":"0"}
+    last_json_data = {"TIMESTAMP": "0"}
 
     try:
-        with open(app_path+'last_integral.json', 'r') as f:
+        with open(app_path + 'last_integral.json', 'r') as f:
             last_json_data = json.load(f)
-        logger.info('last data:{}'.format(last_json_data))
+        logger.info('last data: {}'.format(last_json_data))
     except Exception as e:
-        logger.info('first data:{}'.format(e))
+        logger.info('first data: {}'.format(e))
 
     _30min_power = float(0.0)
     _30min_before = time_stamp + datetime.timedelta(minutes=-30)
 
     try:
-        if(str(time_stamp.timestamp()) == last_json_data["TIMESTAMP"]) :
+        if str(time_stamp.timestamp()) == last_json_data["TIMESTAMP"]:
             logger.info("duplicated")
             return
-
-        if(last_json_data["TIMESTAMP"] == str(_30min_before.timestamp())) :
+        if last_json_data["TIMESTAMP"] == str(_30min_before.timestamp()):
             _30min_power = float(intPower) - float(last_json_data["INTEGRATED_POWER"])
-            logger.info("power delta:"+str(_30min_power))
-
+            logger.info("power delta: " + str(_30min_power))
     except Exception as e:
-        logger.info('TIMESTAMP check failed. just ignore.:{}'.format(e))
+        logger.info('TIMESTAMP check failed. just ignore.: {}'.format(e))
 
     unit_price = get_price_unit(time_stamp)
     logger.info(unit_price)
     charge = _30min_power * unit_price[0]
 
-    data_body = {}
-    data_body["TYPE"] = "INTEGRATED"
-    data_body["INTEGRATED_POWER"] = intPower
+    data_body = {
+        "TYPE": "INTEGRATED",
+        "INTEGRATED_POWER": intPower,
+        "POWER_DELTA": _30min_power,
+        "CHARGE": charge,
+        "POWER_CHARGE_TYPE": unit_price[1],
+    }
 
-    data_body["POWER_DELTA"] = _30min_power
-    data_body["CHARGE"] = charge  
-    data_body["POWER_CHARGE_TYPE"] = unit_price[1] 
-
-    if( unit_price[1] == "day time") :
+    if unit_price[1] == "day time":
         data_body["DAYTIME_POWER_DELTA"] = _30min_power
         data_body["DAYTIME_CHARGE"] = charge
-    elif( unit_price[1] == "life time") :
+    elif unit_price[1] == "life time":
         data_body["LIFETIME_POWER_DELTA"] = _30min_power
         data_body["LIFETIME_CHARGE"] = charge
-    elif( unit_price[1] == "night time") :
+    elif unit_price[1] == "night time":
         data_body["NIGHTTIME_POWER_DELTA"] = _30min_power
         data_body["NIGHTTIME_CHARGE"] = charge
-    else :
+    else:
         logger.warning("unknown charge type")
- 
+
     data_body["TIMESTAMP"] = str(time_stamp.timestamp())
     data_body["DATETIME"] = datetime_str
     data_body["CHECK_DATETIME"] = unit_price[2].strftime(_DATETIME_FORMAT)
     data_body["DATE"] = date_str
 
-    json_body = data_body
-    logger.info(json.dumps(json_body))
+    logger.info(json.dumps(data_body))
 
-    with open(app_path+'last_integral.json','w') as fw :
-        json.dump(json_body,fw)
+    with open(app_path + 'last_integral.json', 'w') as fw:
+        json.dump(data_body, fw)
     logger.info("json file saved")
-    
-    data = send_message(json_body)
+
+    send_message(data_body)
 
 
-def parthD3(EDT) :
-	# 係数
-	hexCoeff = EDT[-8:]    # 最後の4バイト（16進数で8文字）が係数
-	global coeff    
-	coeff = int(hexCoeff , 16)
-	message = "係数:" + str(coeff)
-	logger.info(message)
-
-def parthE1(EDT) :
-	# 単位
-	hexUnit = EDT[-2:]    # 最後の1バイト（16進数で2文字）が単位
-	global unit
-	if hexUnit == "00" :
-		unit = 1
-	if hexUnit == "01" :
-		unit = 0.1
-	if hexUnit == "02" :
-		unit = 0.01
-	if hexUnit == "03" :
-		unit = 0.001
-	if hexUnit == "04" :
-		unit = 0.0001
-	if hexUnit == "0A" :
-		unit = 10
-	if hexUnit == "0B" :
-		unit = 100
-	if hexUnit == "0C" :
-		unit = 1000
-	if hexUnit == "0D" :
-		unit = 10000
-
-	message = "単位:" + hexUnit + ":" + str(unit)
-	logger.info(message)
+def parseD3(EDT):
+    # 係数
+    hexCoeff = EDT[-8:]    # 最後の4バイト（16進数で8文字）が係数
+    state.coeff = int(hexCoeff, 16)
+    logger.info("係数:" + str(state.coeff))
 
 
-def sendCommand(command_str) :
+def parseE1(EDT):
+    # 単位
+    hexUnit = EDT[-2:]    # 最後の1バイト（16進数で2文字）が単位
+    unit_map = {
+        "00": 1,
+        "01": 0.1,
+        "02": 0.01,
+        "03": 0.001,
+        "04": 0.0001,
+        "0A": 10,
+        "0B": 100,
+        "0C": 1000,
+        "0D": 10000,
+    }
+    if hexUnit in unit_map:
+        state.unit = unit_map[hexUnit]
+    else:
+        logger.warning("parseE1: unknown unit code: {}".format(hexUnit))
+    logger.info("単位:" + hexUnit + ":" + str(state.unit))
+
+
+def sendCommand(command_str):
     command_base = "SKSENDTO 1 {0} 0E1A 1 {1:04X} ".format(ipv6Addr, len(command_str))
-    command = command_base.encode() + command_str 
+    command = command_base.encode() + command_str
     logger.info(b"SEND: " + command)
-    # コマンド送信
     ser.write(command)
 
-    #print(ser.readline(), end="") # エコーバック
-    #print(ser.readline(), end="") # EVENT 21 が来るはず（チェック無し）
-    #print(ser.readline(), end="") # OKが来るはず（チェック無し）
     logger.info(str(ser.readline()))
     logger.info(str(ser.readline()))
-    
-    chk_ok = "none"
-    global failure_count
+
     wait_ok_count = 0
 
-    while wait_ok_count < _MAX_FAILURE_COUNT :
+    while wait_ok_count < _MAX_FAILURE_COUNT:
         chk_ok = str(ser.readline().decode('utf-8'))
-        logger.info("checking ok?:{}".format(chk_ok))
-        if chk_ok.startswith("OK") :
+        logger.info("checking ok?: {}".format(chk_ok))
+        if chk_ok.startswith("OK"):
             logger.info("OK!")
             wait_ok_count = 0
             break
-        else :
-            logger.info("err...:{}".format(wait_ok_count))
+        else:
+            logger.info("err...: {}".format(wait_ok_count))
             wait_ok_count += 1
 
-    if wait_ok_count >= _MAX_FAILURE_COUNT :
-        failure_count += 1
-    else :
-        line = str(ser.readline().decode('utf-8'))         # ERXUDPが来るはず
+    if wait_ok_count >= _MAX_FAILURE_COUNT:
+        state.failure_count += 1
+    else:
+        line = str(ser.readline().decode('utf-8'))    # ERXUDPが来るはず
         logger.info(line)
 
         # 受信データはたまに違うデータが来たり、
         # 取りこぼしたりして変なデータを拾うことがあるので
         # チェックを厳しめにしてます。
 
-        if line.startswith("ERXUDP") :
+        if line.startswith("ERXUDP"):
             cols = line.strip().split(' ')
             res = cols[8]   # UDP受信データ部分
-            #tid = res[4:4+4];
             seoj = res[8:8+6]
-            #deoj = res[14,14+6]
             ESV = res[20:20+2]
             OPC_HEX = res[22:22+2]
-            OPC = int(OPC_HEX,16)
+            OPC = int(OPC_HEX, 16)
             OPC_COUNT = 0
             CUR_POSITION = 24
-            
-            if seoj == "028801" and ESV == "72" :
-                failure_count = 0
-                while OPC_COUNT < OPC :
+
+            if seoj == "028801" and ESV == "72":
+                state.failure_count = 0
+                while OPC_COUNT < OPC:
                     # スマートメーター(028801)から来た応答(72)なら
                     EPC = res[CUR_POSITION:CUR_POSITION+2]
-                    CUR_POSITION+=2
+                    CUR_POSITION += 2
                     EPD_hex = res[CUR_POSITION:CUR_POSITION+2]
                     EPD = int(EPD_hex, 16)
-                    CUR_POSITION+=2
+                    CUR_POSITION += 2
                     EDT = ""
-                    if EPD > 0 :
+                    if EPD > 0:
                         EDT = res[CUR_POSITION:CUR_POSITION+2*EPD]
-                        CUR_POSITION+=2*EPD
-                    if EPC == "E7" :
-                        # 内容が瞬時電力計測値(E7)だったら
-                        parthE7(EDT)
-                    if EPC == "EA" :
-                        # 内容がEAだったら
-                        parthEA(EDT)
-                    if EPC == "D3" :
-                        # 内容がEAだったら
-                        parthD3(EDT)
-                    if EPC == "E1" :
-                        # 内容がEAだったら
-                        parthE1(EDT)
-                    OPC_COUNT+=1
-            else :
-                failure_count += 1
-        else :
-            failure_count += 1
+                        CUR_POSITION += 2*EPD
+                    if EPC == "E7":
+                        parseE7(EDT)
+                    if EPC == "EA":
+                        parseEA(EDT)
+                    if EPC == "D3":
+                        parseD3(EDT)
+                    if EPC == "E1":
+                        parseE1(EDT)
+                    OPC_COUNT += 1
+            else:
+                state.failure_count += 1
+        else:
+            state.failure_count += 1
 
-    logger.info("failure_count :{}".format(failure_count))
+    logger.info("failure_count: {}".format(state.failure_count))
 
-    if failure_count > _MAX_FAILURE_COUNT :
-        logger.info("RESTART! :{}".format(failure_count))
-        sleep_count=0
-        while sleep_count < 10 :
+    if state.failure_count > _MAX_FAILURE_COUNT:
+        logger.info("RESTART!: {}".format(state.failure_count))
+        for i in range(10):
             time.sleep(1)
-            sleep_count = sleep_count +1
-            logger.info('sleep_count:{}'.format(sleep_count))
+            logger.info('sleep_count: {}'.format(i + 1))
         sys.exit(-1)
-    else :
+    else:
         logger.info("end of sendCommand")
+
+
+def speak(speech_text):
+    global _cast_cache
+    logger.info("pychromecast start")
+
+    try:
+        casts = _get_chromecasts()
+    except Exception as e:
+        logger.exception("Chromecast discovery failed: {}".format(e))
         return
 
-
-def speak(speech_text) :
-    logger.info("pychromecast start")  
-
-    casts, browser = pychromecast.get_chromecasts(known_hosts=google_home_list)
-    # Shut down discovery as we don't care about updates
-    browser.stop_discovery()
-
-    speack_enc = urllib.parse.quote(speech_text)
-    mp3url = "http://translate.google.com/translate_tts?ie=UTF-8&q="+speack_enc+"&tl=ja&client=tw-ob"
+    speak_enc = urllib.parse.quote(speech_text)
+    mp3url = "https://translate.google.com/translate_tts?ie=UTF-8&q=" + speak_enc + "&tl=ja&client=tw-ob"
     logger.info(mp3url)
 
     for googlehome in casts:
-        try :
+        try:
+            if not googlehome.wait(timeout=5):
+                logger.warning("Chromecast did not connect within 5s, skipping")
+                continue
             mc = googlehome.media_controller
-            googlehome.wait()
-            mc.play_media(mp3url,'audio/mp3')
+            mc.play_media(mp3url, 'audio/mp3')
 
-            # Wait for player_state PLAYING
+            # 再生開始を待ち、完了まで監視する
+            # has_played=False: まだ再生していない状態からスタート（Nest Hub 対応）
             player_state = None
-            t = 10
-            has_played = True
-            while (t>0 and has_played == True) :
-                if player_state != googlehome.media_controller.status.player_state:
-                    player_state = googlehome.media_controller.status.player_state
-                    logger.info("Player state:{}".format(googlehome.media_controller.status))
+            has_played = False
+            t = 10.0
+            while t > 0:
+                current_state = googlehome.media_controller.status.player_state
+                if current_state != player_state:
+                    player_state = current_state
+                    logger.info("Player state: {}".format(googlehome.media_controller.status))
                 if player_state == "PLAYING":
                     has_played = True
-                if googlehome.socket_client.is_connected and has_played and player_state != "PLAYING":
-                    has_played = False
+                elif has_played and player_state in ("IDLE", "UNKNOWN", None):
+                    # 一度再生が始まり、その後停止したら終了
                     break
-
                 time.sleep(0.1)
-                t = t - 0.1
+                t -= 0.1
 
         except Exception as e:
-            logger.exception('error in speak:{}'.format(e))
+            logger.exception("error in speak: {}".format(e))
+            _cast_cache = None  # 接続エラー時はキャッシュをリセットして次回再スキャン
 
     logger.info("google home notifier end")
 
 
 if __name__ == '__main__':
-    #ロガー取得
     logger = logging.getLogger('Logging')
 
     logname = "/var/log/tools/b-route.log"
@@ -803,10 +747,10 @@ if __name__ == '__main__':
     ser.readline()
 
     scanDuration = 4   # スキャン時間。サンプルでは6なんだけど、4でも行けるので。（ダメなら増やして再試行）
-    scanRes = {} # スキャン結果の入れ物
+    scanRes = {}
 
     # スキャンのリトライループ（何か見つかるまで）
-    while "Channel" not in scanRes :
+    while "Channel" not in scanRes:
         # アクティブスキャン（IE あり）を行う
         # 時間かかります。10秒ぐらい？
         ser.write(("SKSCAN 2 FFFFFFFF " + str(scanDuration) + "\r\n").encode())
@@ -814,20 +758,20 @@ if __name__ == '__main__':
         # スキャン1回について、スキャン終了までのループ
         scanEnd = False
         scan_counter = 0
-        while not scanEnd :
+        while not scanEnd:
             line = str(ser.readline().decode('utf-8'))
-            scan_counter+=1
-            logger.info("counter:{},{}".format(scan_counter,line)) 
+            scan_counter += 1
+            logger.info("counter: {}, {}".format(scan_counter, line))
 
-            if scan_counter > _MAX_FAILURE_COUNT*10 :
+            if scan_counter > _MAX_FAILURE_COUNT * 10:
                 logger.error("scanning error!!")
                 ser.close()
-                sys.exit()           
+                sys.exit()
 
-            if line.startswith("EVENT 22") :
+            if line.startswith("EVENT 22"):
                 # スキャン終わったよ（見つかったかどうかは関係なく）
                 scanEnd = True
-            elif line.startswith("  ") :
+            elif line.startswith("  "):
                 # スキャンして見つかったらスペース2個あけてデータがやってくる
                 # 例
                 #  Channel:39
@@ -838,7 +782,7 @@ if __name__ == '__main__':
                 #  PairID:FFFFFFFF
                 cols = line.strip().split(':')
                 scanRes[cols[0]] = cols[1]
-        scanDuration+=1
+        scanDuration += 1
 
         if 14 < scanDuration and "Channel" not in scanRes:
             # 引数としては14まで指定できるが、7で失敗したらそれ以上は無駄っぽい
@@ -850,41 +794,32 @@ if __name__ == '__main__':
     ser.write(("SKSREG S2 " + scanRes["Channel"] + "\r\n").encode())
     logger.info(str(ser.readline().decode('utf-8')))
     logger.info(str(ser.readline().decode('utf-8')))
-    #print(ser.readline(), end="") # エコーバック
-    #print(ser.readline(), end="") # OKが来るはず（チェック無し）
 
     # スキャン結果からPan IDを設定
     ser.write(("SKSREG S3 " + scanRes["Pan ID"] + "\r\n").encode())
-    #print(ser.readline(), end="") # エコーバック
-    #print(ser.readline(), end="") # OKが来るはず（チェック無し）
     logger.info(str(ser.readline().decode('utf-8')))
     logger.info(str(ser.readline().decode('utf-8')))
 
     # MACアドレス(64bit)をIPV6リンクローカルアドレスに変換。
     # (BP35A1の機能を使って変換しているけど、単に文字列変換すればいいのではという話も？？)
     ser.write(("SKLL64 " + scanRes["Addr"] + "\r\n").encode())
-    #print(ser.readline(), end="") # エコーバック
     logger.info(str(ser.readline().decode('utf-8')))
     ipv6Addr = str(ser.readline().decode('utf-8')).strip()
-    #print(ipv6Addr)
 
     # PANA 接続シーケンスを開始します。
     ser.write(("SKJOIN " + ipv6Addr + "\r\n").encode())
-    #print(ser.readline(), end="") # エコーバック
-    #print(ser.readline(), end="") # OKが来るはず（チェック無し）
     logger.info(str(ser.readline().decode('utf-8')))
     logger.info(str(ser.readline().decode('utf-8')))
 
     # PANA 接続完了待ち（10行ぐらいなんか返してくる）
     bConnected = False
-    while not bConnected :
+    while not bConnected:
         line = str(ser.readline().decode('utf-8'))
-        #print(line, end="")
-        if line.startswith("EVENT 24") :
+        if line.startswith("EVENT 24"):
             logger.error("PANA 接続失敗")
             ser.close()
             sys.exit()  #### 糸冬了 ####
-        elif line.startswith("EVENT 25") :
+        elif line.startswith("EVENT 25"):
             # 接続完了！
             bConnected = True
 
@@ -895,10 +830,9 @@ if __name__ == '__main__':
     # (ECHONET-Lite_Ver.1.12_02.pdf p.4-16)
     logger.info(str(ser.readline().decode('utf-8')))
 
-    GetEnd = True
     counter = 30
 
-    while True :
+    while True:
         JST = datetime.timezone(datetime.timedelta(hours=+9), 'JST')
         cur_timestamp = datetime.datetime.now(JST)
         cur_datetime_str = cur_timestamp.strftime(_DATETIME_FORMAT_TZ)
@@ -912,16 +846,15 @@ if __name__ == '__main__':
 
         time.sleep(1)
 
-        if counter > 15 :
+        if counter > 15:
             counter = 0
             logger.info('before GET_LATEST30')
             sendCommand(GET_LATEST30)
-            logger.info('after GET_LATEST30')            
+            logger.info('after GET_LATEST30')
             time.sleep(1)
 
-        counter = counter + 1
-        logger.info('loop counter:{}'.format(counter)) 
-
+        counter += 1
+        logger.info('loop counter: {}'.format(counter))
 
     # 無限ループだからここには来ないけどな
     ser.close()
