@@ -587,6 +587,8 @@ def parseE1(EDT):
     }
     if hexUnit in unit_map:
         state.unit = unit_map[hexUnit]
+    else:
+        logger.warning("parseE1: unknown unit code: {}".format(hexUnit))
     logger.info("単位:" + hexUnit + ":" + str(state.unit))
 
 
