@@ -87,7 +87,7 @@ def get_data():
             if "CO2" in key:         return (400, 2000)
             if "TEMPERATURE" in key: return (10, 40)
             if "HUMIDITY" in key:    return (0, 100)
-            if "LIGHT_LEVEL" in key: return (0, 1000)
+            if "LIGHT_LEVEL" in key: return (0, 20)
             if key == "POWER":       return (0, 6000)
             if "PLUG" in key:        return (0, 1500)
             return None
@@ -96,7 +96,7 @@ def get_data():
             if "CO2" in key:         return "ppm"
             if "TEMPERATURE" in key: return "°C"
             if "HUMIDITY" in key:    return "%"
-            if "LIGHT_LEVEL" in key: return "lx"
+            if "LIGHT_LEVEL" in key: return ""
             if key == "POWER":       return "W"
             if "PLUG" in key:        return "W"
             return ""
