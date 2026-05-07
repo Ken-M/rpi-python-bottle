@@ -29,6 +29,7 @@ echo [3/4] Building measure-application (linux/arm64)...
 echo       NOTE: Python source build may take 30-60 minutes
 docker buildx build ^
     --platform linux/arm64 ^
+    --no-cache ^
     --pull ^
     --push ^
     -t kenonemorita/rpi-python-bottle-app-measure ^
