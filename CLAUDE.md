@@ -154,3 +154,17 @@ docker compose up -d
 OneDrive 同期競合により pack オブジェクト破損の可能性がある。  
 `git log` や `git status` が異常を示した場合は `git gc` を実行すること。  
 （解消しない場合は GitHub からクリーンにクローンし直すこと）
+
+---
+
+## 開発ルール
+
+**コード修正時は必ずブランチへの commit・push・PR 作成まで行うこと。**
+
+1. 作業用ブランチを作成: `git checkout -b claude/<説明的な名前>`
+2. 変更をコミット: `git add <files> && git commit -m "<type>: <説明>"`
+3. プッシュ: `git push origin HEAD`
+4. PR 作成: `gh pr create --title "..." --body "..."`
+5. `master` ブランチへの直接コミットは禁止
+
+コミットメッセージは Conventional Commits 形式（`fix:`, `feat:`, `docs:`, `refactor:` 等）を使用。
