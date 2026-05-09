@@ -5,11 +5,9 @@ USER root
 
 # ca-certificates を含む必要パッケージを一括インストール
 # ca-certificates は wget が python.org の TLS 証明書を検証するために必須
-# libgnutls30t64: CVE-2026-33845 (CRITICAL) DoS via DTLS zero-length の修正を確実に適用
 RUN apt-get update && apt-get upgrade -y --no-install-recommends && \
     apt-get install -y --no-install-recommends \
         ca-certificates \
-        libgnutls30t64 \
         vim sudo wget curl net-tools git \
         build-essential checkinstall \
         libncursesw5-dev libgdbm-dev libc6-dev zlib1g-dev \
