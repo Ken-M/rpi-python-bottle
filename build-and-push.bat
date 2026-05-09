@@ -44,6 +44,7 @@ REM       python:3.14-slim base (lightweight and fast)
 echo [4/4] Building my_flask_app (linux/arm64)...
 docker buildx build ^
     --platform linux/arm64 ^
+    --no-cache ^
     --pull ^
     --push ^
     -t kenonemorita/rpi-python-bottle-my-flask-app ^
