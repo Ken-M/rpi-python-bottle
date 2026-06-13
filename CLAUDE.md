@@ -91,10 +91,12 @@ build-and-push.bat
 ```bash
 # app_measure のみ
 docker buildx build --platform linux/arm64 --pull --push \
+  --secret id=takumi_guard_token,src=takumi_guard_token \
   -t kenonemorita/rpi-python-bottle-app-measure ./app_measure
 
 # my_flask_app のみ
 docker buildx build --platform linux/arm64 --pull --push \
+  --secret id=takumi_guard_token,src=takumi_guard_token \
   -t kenonemorita/rpi-python-bottle-my-flask-app ./my_flask_app
 ```
 
@@ -133,6 +135,22 @@ docker compose up -d
 | `app_measure/gcp_environment.py` | GCP エンドポイント・対象オーディエンス等 |
 | `my_flask_app/my_flask_app_secret.py` | Basic 認証ユーザー辞書（`USER_DATA`） |
 | `ngrok/ngrok.yml` | ngrok 認証トークン・トンネル設定 |
+| `takumi_guard_token`（プロジェクトルート） | Takumi Guard の PyPI 認証トークン（`tg_anon_…`）。ビルド時に使用 |
+
+### サプライチェーン対策（Takumi Guard / Shisho Guard）
+
+`app_measure` / `my_flask_app` の `pip install` は [Takumi Guard](https://shisho.dev/docs/ja/t/guard/quickstart/) の
+PyPI ミラー（`pypi.flatt.tech`）経由で取得し、悪性パッケージをブロックする。
+
+- 認証は **匿名（メール認証）** ティアを利用。`takumi_guard_token.tmpl` を参考に、
+  プロジェクトルートへ `takumi_guard_token`（`.gitignore` 済み）を配置しトークンを記載する。
+- トークンは Docker の **BuildKit secret**（`--mount=type=secret,id=takumi_guard_token`）として
+  ビルド時のみマウントされ、イメージ層・`docker history` には残らない。
+- 各 `pip` 系 `RUN` 内で `PIP_INDEX_URL=https://token:<TOKEN>@pypi.flatt.tech/simple/` を組み立てる。
+  トークン未設定／空の場合は匿名モード（`https://pypi.flatt.tech/simple/`）にフォールバックする。
+- `build-and-push.bat` は両ビルドに `--secret id=takumi_guard_token,src=takumi_guard_token` を渡す。
+  個別ビルド時も同じ `--secret` フラグを付けること。
+- Dockerfile 冒頭の `# syntax=docker/dockerfile:1.7` は secret マウントに必要なため削除しない。
 
 ### my_flask_app ダッシュボード
 

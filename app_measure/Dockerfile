@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 # Python は debian:trixie (Debian 13 stable) からソースビルド
 FROM --platform=$TARGETPLATFORM debian:trixie
 
@@ -28,12 +29,22 @@ RUN wget https://www.python.org/ftp/python/3.14.4/Python-3.14.4.tar.xz && \
     cd / && rm -rf /usr/local/src/Python-3.14.4 /usr/local/src/Python-3.14.4.tar.xz
 
 # pip をアップグレード
-RUN pip3 install --upgrade pip setuptools wheel
+# Takumi Guard (Shisho Guard) 経由で PyPI を取得しサプライチェーン攻撃を防ぐ。
+# トークンは BuildKit secret (takumi_guard_token) でマウントし、イメージ層へは焼き込まない。
+# トークン未設定時は匿名モード (registry のみ) でフォールバックする。
+RUN --mount=type=secret,id=takumi_guard_token \
+    TG_TOKEN="$(grep -oE 'tg_[A-Za-z0-9_]+' /run/secrets/takumi_guard_token 2>/dev/null | head -n1)"; \
+    export PIP_INDEX_URL="https://${TG_TOKEN:+token:${TG_TOKEN}@}pypi.flatt.tech/simple/"; \
+    pip3 install --upgrade pip setuptools wheel
 
 # Python パッケージをインストール
 # cryptography・grpcio はいずれも linux/arm64 の pre-built wheel が PyPI に存在するため
 # Rust コンパイルは不要（Rustup インストール不要）
-RUN pip3 install --no-cache-dir \
+# こちらも Takumi Guard 経由で取得する（secret マウントは RUN ごとに必要）。
+RUN --mount=type=secret,id=takumi_guard_token \
+    TG_TOKEN="$(grep -oE 'tg_[A-Za-z0-9_]+' /run/secrets/takumi_guard_token 2>/dev/null | head -n1)"; \
+    export PIP_INDEX_URL="https://${TG_TOKEN:+token:${TG_TOKEN}@}pypi.flatt.tech/simple/"; \
+    pip3 install --no-cache-dir \
         wheel \
         pyserial \
         retry2 \

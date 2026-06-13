@@ -32,6 +32,7 @@ docker buildx build ^
     --no-cache ^
     --pull ^
     --push ^
+    --secret id=takumi_guard_token,src=takumi_guard_token ^
     -t kenonemorita/rpi-python-bottle-app-measure ^
     ./app_measure
 if %ERRORLEVEL% neq 0 (
@@ -47,6 +48,7 @@ docker buildx build ^
     --no-cache ^
     --pull ^
     --push ^
+    --secret id=takumi_guard_token,src=takumi_guard_token ^
     -t kenonemorita/rpi-python-bottle-my-flask-app ^
     ./my_flask_app
 if %ERRORLEVEL% neq 0 (
