@@ -19,14 +19,14 @@ RUN apt-get update && apt-get upgrade -y --no-install-recommends && \
     apt-get -qy autoremove && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Python 3.14.4 をソースからビルド・インストール後、ソースを削除
+# Python 3.14.6 をソースからビルド・インストール後、ソースを削除
 WORKDIR /usr/local/src
-RUN wget https://www.python.org/ftp/python/3.14.4/Python-3.14.4.tar.xz && \
-    tar xvf Python-3.14.4.tar.xz && \
-    cd Python-3.14.4 && \
+RUN wget https://www.python.org/ftp/python/3.14.6/Python-3.14.6.tar.xz && \
+    tar xvf Python-3.14.6.tar.xz && \
+    cd Python-3.14.6 && \
     ./configure --enable-optimizations && \
     make && make install && \
-    cd / && rm -rf /usr/local/src/Python-3.14.4 /usr/local/src/Python-3.14.4.tar.xz
+    cd / && rm -rf /usr/local/src/Python-3.14.6 /usr/local/src/Python-3.14.6.tar.xz
 
 # pip をアップグレード
 # Takumi Guard (Shisho Guard) 経由で PyPI を取得しサプライチェーン攻撃を防ぐ。

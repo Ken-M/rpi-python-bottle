@@ -22,13 +22,13 @@ Raspberry Pi 5 上で稼働する**電力計測・スマートホーム連携サ
 ├── README.md                   # 旧メモ（Python 3.5 時代。現在は本ファイルを参照）
 ├── .gitignore
 ├── app_measure/                # 電力計測・GCP 送信サービス
-│   ├── Dockerfile              # debian:trixie + Python 3.14.4 ソースビルド
+│   ├── Dockerfile              # debian:trixie + Python 3.14.6 ソースビルド
 │   ├── get-power.py            # メインループ（スマートメーター通信・Redis 書き込み）
 │   ├── echonet.py              # ECHONET Lite コマンド定数（GET_NOW_POWER, GET_LATEST30）
 │   ├── gcp_environment_tmpl.py # GCP 設定テンプレート → gcp_environment.py を Pi 上に配置
 │   └── secret_tmpl.py          # 認証情報テンプレート → secret.py を Pi 上に配置
 ├── my_flask_app/               # ホームダッシュボード Flask アプリ
-│   ├── Dockerfile              # python:3.14-slim ベース
+│   ├── Dockerfile              # python:3.14.6-slim ベース
 │   ├── my_flask_app.py         # Flask 本体（Redis 読み取り・HTML レンダリング）
 │   └── my_flask_app_tmpl.py    # 認証情報テンプレート → my_flask_app_secret.py を Pi 上に配置
 ├── cloudfunctions/             # GCP Cloud Functions（Node.js）
@@ -116,7 +116,7 @@ docker compose up -d
 
 ### app_measure: Python ソースビルド（debian:trixie）
 
-- ベースイメージ `debian:trixie` 上で **Python 3.14.4 をソースコンパイル**する
+- ベースイメージ `debian:trixie` 上で **Python 3.14.6 をソースコンパイル**する
 - `ca-certificates` のインストールが**必須**。欠落すると `wget` が python.org の TLS 証明書検証に失敗してビルドが中断する（クロスビルド時も同様）
 - ビルド時間は 30〜60 分。Dockerfile を変更していなければ Docker キャッシュが効く
 
