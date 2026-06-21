@@ -1,0 +1,17 @@
+# Takumi Guard (Shisho Guard) PyPI 認証トークン — テンプレート
+# https://shisho.dev/docs/ja/t/guard/quickstart/
+#
+# 【使い方】
+# 1. メールアドレスを登録し、tg_anon_ で始まるトークンを取得する（匿名・メール認証）。
+# 2. このファイルをコピーして、拡張子 .tmpl を外した `takumi_guard_token`
+#    というファイル名でプロジェクトルートに保存する（.gitignore 済み）。
+# 3. 下の行のプレースホルダを実際のトークンに書き換える。
+#
+# ビルド時、Dockerfile は `tg_xxx` 形式のトークンをこのファイルから抽出して
+#   PIP_INDEX_URL=https://token:<TOKEN>@pypi.flatt.tech/simple/
+# を組み立てる。`#` で始まる行は無視されるため、このコメントは残してよい。
+# トークン行を空にしたまま／ファイルを空にした場合は、匿名モード
+#   PIP_INDEX_URL=https://pypi.flatt.tech/simple/
+# にフォールバックする（registry によるパッケージブロックは有効）。
+
+tg_anon_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx

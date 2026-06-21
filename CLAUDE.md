@@ -91,10 +91,12 @@ build-and-push.bat
 ```bash
 # app_measure のみ
 docker buildx build --platform linux/arm64 --pull --push \
+  --secret id=takumi_guard_token,src=takumi_guard_token \
   -t kenonemorita/rpi-python-bottle-app-measure ./app_measure
 
 # my_flask_app のみ
 docker buildx build --platform linux/arm64 --pull --push \
+  --secret id=takumi_guard_token,src=takumi_guard_token \
   -t kenonemorita/rpi-python-bottle-my-flask-app ./my_flask_app
 ```
 
@@ -133,6 +135,49 @@ docker compose up -d
 | `app_measure/gcp_environment.py` | GCP エンドポイント・対象オーディエンス等 |
 | `my_flask_app/my_flask_app_secret.py` | Basic 認証ユーザー辞書（`USER_DATA`） |
 | `ngrok/ngrok.yml` | ngrok 認証トークン・トンネル設定 |
+| `takumi_guard_token`（プロジェクトルート） | Takumi Guard の PyPI 認証トークン（`tg_anon_…`）。ビルド時に使用 |
+
+### サプライチェーン対策（Takumi Guard / Shisho Guard）
+
+`app_measure` / `my_flask_app` の `pip install` は [Takumi Guard](https://shisho.dev/docs/ja/t/guard/quickstart/) の
+PyPI ミラー（`pypi.flatt.tech`）経由で取得し、悪性パッケージをブロックする。
+
+- 認証は **匿名（メール認証）** ティアを利用。`takumi_guard_token.tmpl` を参考に、
+  プロジェクトルートへ `takumi_guard_token`（`.gitignore` 済み）を配置しトークンを記載する。
+- トークンは Docker の **BuildKit secret**（`--mount=type=secret,id=takumi_guard_token`）として
+  ビルド時のみマウントされ、イメージ層・`docker history` には残らない。
+- 各 `pip` 系 `RUN` 内で `PIP_INDEX_URL=https://token:<TOKEN>@pypi.flatt.tech/simple/` を組み立てる。
+  トークン未設定／空の場合は匿名モード（`https://pypi.flatt.tech/simple/`）にフォールバックする。
+- `build-and-push.bat` は両ビルドに `--secret id=takumi_guard_token,src=takumi_guard_token` を渡す。
+  個別ビルド時も同じ `--secret` フラグを付けること。
+- Dockerfile 冒頭の `# syntax=docker/dockerfile:1.7` は secret マウントに必要なため削除しない。
+
+#### cloudfunctions（npm / GCP Cloud Functions）
+
+`cloudfunctions/` は Docker コンテナではなく GCP Cloud Functions（Node.js）だが、
+コンテナ群と同等のサプライチェーン対策を施している。
+
+- **依存の固定**: `cloudfunctions/package-lock.json`（`lockfileVersion 3`）をコミットし、
+  推移的依存を含む全パッケージのバージョンと integrity を固定する。デプロイ時は `npm ci` が使われる。
+- **Guard 経由の取得**: `cloudfunctions/.npmrc` で `registry=https://npm.flatt.tech/` を設定。
+  lockfile の `resolved` は `registry.npmjs.org` のままだが、npm の `replace-registry-host`
+  （既定 `npmjs`）により install 時にホストが Guard へ置換され、tarball は Guard 経由で取得される
+  （integrity は registry 非依存なので一致する）。
+- **トークン注入**: `.npmrc` の `//npm.flatt.tech/:_authToken=${TAKUMI_GUARD_TOKEN}` は
+  環境変数参照のみでトークン値を含まない（コミット安全）。デプロイ時に `takumi_guard_token` と同じ
+  トークン値を **ビルド環境変数** `TAKUMI_GUARD_TOKEN` で渡す。未設定なら匿名モード（ブロックのみ）。
+- **デプロイ例**:
+  ```bash
+  TOKEN="$(grep -oE 'tg_[A-Za-z0-9_]+' ../takumi_guard_token | head -n1)"
+  gcloud functions deploy regdata \
+    --source=. --runtime=nodejs22 --trigger-http \
+    --set-build-env-vars "TAKUMI_GUARD_TOKEN=${TOKEN}"
+  ```
+- `package-lock.json` 再生成時も Guard 経由で:
+  `npm install --package-lock-only --registry=https://npm.flatt.tech/`
+- 既知の課題: `@google-cloud/bigquery@^7` が脆弱な `uuid <11.1.1`（GHSA-w5hq-g745-h8pq, moderate）に
+  依存。解消には `bigquery` の v8 への更新（破壊的変更）が必要なため、BigQuery 書き込みの動作確認と
+  併せて別途対応する。
 
 ### my_flask_app ダッシュボード
 
