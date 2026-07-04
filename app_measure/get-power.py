@@ -10,6 +10,12 @@ from __future__ import print_function
 from echonet import *
 from secret import *
 from gcp_environment import *
+from shared_config import (
+    PRICE_NIGHT_TIME,
+    PRICE_DAY_TIME,
+    PRICE_LIFE_TIME,
+    POWER_ALERT_THRESHOLD_W,
+)
 
 import base64
 import csv
@@ -181,7 +187,7 @@ def publish_message(json_body, jwt_token):
     }
 
     logger.info("trig. cloud function.")
-    logger.info(json.dumps(json_body))
+    logger.debug(json.dumps(json_body))
     resp = requests.post(audience, json=json_body, headers=headers, timeout=_REQUEST_TIMEOUT)
 
     if resp.status_code != 200:
@@ -238,7 +244,7 @@ def create_switchbot_token():
 def get_request(url, headers):
     response = requests.get(url, headers=headers, timeout=_REQUEST_TIMEOUT)
     logger.info(response)
-    logger.info(response.json())
+    logger.debug(response.json())
 
     if response.status_code != 200 and response.status_code != 401:
         logger.warning('Response came back {}, retrying'.format(response.status_code))
@@ -253,7 +259,7 @@ def _get_switchbot_device_body(device_id):
     headers = create_switchbot_token()
     response = get_request(url, headers)
     body = response.json()["body"]
-    logger.info(json.dumps(body, indent=4))
+    logger.debug(json.dumps(body, indent=4))
     return body
 
 
@@ -283,7 +289,7 @@ def get_sb_device_list():
     try:
         response = get_request(url, headers)
         body = response.json()["body"]
-        logger.info(json.dumps(body, indent=4))
+        logger.debug(json.dumps(body, indent=4))
     except Exception as e:
         logger.error('request failed: {}'.format(e))
 
@@ -306,38 +312,38 @@ def isHoliday(check_date):
 
 def get_price_unit(check_date):
     JST = datetime.timezone(datetime.timedelta(hours=+9), 'JST')
-    logger.info(check_date)
+    logger.debug(check_date)
     check_time = check_date - datetime.timedelta(minutes=15)
-    logger.info(check_time)
-    logger.info(check_date.weekday())
-    logger.info(jpholiday.is_holiday(check_date.date()))
+    logger.debug(check_time)
+    logger.debug(check_date.weekday())
+    logger.debug(jpholiday.is_holiday(check_date.date()))
 
     check_time_yesterday = check_time - datetime.timedelta(days=1)
 
     if isHoliday(check_time):
         if datetime.time(hour=22, minute=0, second=0, tzinfo=JST) <= check_time.timetz():
-            return 22.98, "night time", check_time
+            return PRICE_NIGHT_TIME, "night time", check_time
     if isHoliday(check_time_yesterday):
         if check_time.timetz() < datetime.time(hour=8, minute=0, second=0, tzinfo=JST):
-            return 22.98, "night time", check_time
+            return PRICE_NIGHT_TIME, "night time", check_time
 
     if not isHoliday(check_time):
         if datetime.time(hour=23, minute=0, second=0, tzinfo=JST) <= check_time.timetz():
-            return 22.98, "night time", check_time
+            return PRICE_NIGHT_TIME, "night time", check_time
     if not isHoliday(check_time_yesterday):
         if check_time.timetz() < datetime.time(hour=6, minute=0, second=0, tzinfo=JST):
-            return 22.98, "night time", check_time
+            return PRICE_NIGHT_TIME, "night time", check_time
 
     if not isHoliday(check_time):
         if (datetime.time(hour=9, minute=0, second=0, tzinfo=JST) <= check_time.timetz() <
                 datetime.time(hour=16, minute=0, second=0, tzinfo=JST)):
-            return 20.05, "day time", check_time
+            return PRICE_DAY_TIME, "day time", check_time
     else:
         if (datetime.time(hour=8, minute=0, second=0, tzinfo=JST) <= check_time.timetz() <
                 datetime.time(hour=22, minute=0, second=0, tzinfo=JST)):
-            return 20.05, "day time", check_time
+            return PRICE_DAY_TIME, "day time", check_time
 
-    return 32.65, "life time", check_time
+    return PRICE_LIFE_TIME, "life time", check_time
 
 
 def get_hub_data():
@@ -359,7 +365,7 @@ def get_hub_data():
         except Exception as e:
             logger.error('request failed: {}'.format(e))
 
-    logger.info(hub_data_body)
+    logger.debug(hub_data_body)
     return hub_data_body
 
 
@@ -377,7 +383,7 @@ def get_mining_status():
 
         if resp.status_code == 200:
             data_list = resp.json()
-            logger.info(json.dumps(data_list, indent=4))
+            logger.debug(json.dumps(data_list, indent=4))
 
             for group in data_list["groupList"]:
                 for miner in group["minerList"]:
@@ -417,16 +423,18 @@ def get_mining_status():
     except Exception as e:
         logger.warning("mining status timeout. {}".format(e))
 
-    logger.info(mining_status_body)
+    logger.debug(mining_status_body)
     return mining_status_body
 
 
 def setCurrentElectricityPrice(timestamp):
     current_electricity_price = get_price_unit(timestamp)
     logger.info("Current electricity price: {}".format(current_electricity_price[0]))
-    query_string = "&value=" + str(current_electricity_price[0])
     try:
-        resp = requests.post(miner_set_electricity_price + query_string, timeout=_REQUEST_TIMEOUT)
+        resp = requests.post(
+            miner_set_electricity_price,
+            params={'value': current_electricity_price[0]},
+            timeout=_REQUEST_TIMEOUT)
         logger.info(resp)
     except Exception as e:
         logger.warning("setCurrentElectricityPrice failed. {}".format(e))
@@ -445,7 +453,7 @@ def parseE7(EDT):
     body = "瞬時電力:" + str(intPower) + "[W]"
     body = body + "(" + datetime_str + ")"
 
-    if intPower > 4800:
+    if intPower > POWER_ALERT_THRESHOLD_W:
         # speak() はデバイスごとに最大10秒ブロックするため、
         # クールダウンを設けて連続超過時の通知スパムとループ遅延を防ぐ
         if (state.last_speak_sent is None or
@@ -477,20 +485,16 @@ def parseE7(EDT):
         state.last_switchbot_sent = time_stamp
 
     logger.info(body)
-    logger.info(json.dumps(data_body))
+    logger.debug(json.dumps(data_body))
 
     send_message(data_body)
 
     if state.latest_instant_val is None:
-        state.latest_instant_val = {
-            key: {"value": value, "updated_at": datetime_str + "+0900"}
-            for key, value in data_body.items()
-        }
-    else:
-        for key, value in data_body.items():
-            state.latest_instant_val[key] = {"value": value, "updated_at": datetime_str + "+0900"}
+        state.latest_instant_val = {}
+    for key, value in data_body.items():
+        state.latest_instant_val[key] = {"value": value, "updated_at": datetime_str + "+0900"}
 
-    logger.info("merged json: {}".format(json.dumps(state.latest_instant_val)))
+    logger.debug("merged json: {}".format(json.dumps(state.latest_instant_val)))
     redis_client.set('my_key', json.dumps(state.latest_instant_val))
 
     state.last_instant_sent = time_stamp
@@ -575,7 +579,7 @@ def parseEA(EDT):
     data_body["CHECK_DATETIME"] = unit_price[2].strftime(_DATETIME_FORMAT)
     data_body["DATE"] = date_str
 
-    logger.info(json.dumps(data_body))
+    logger.debug(json.dumps(data_body))
 
     with open(app_path + 'last_integral.json', 'w') as fw:
         json.dump(data_body, fw)
@@ -624,7 +628,7 @@ def sendCommand(command_str):
     wait_ok_count = 0
 
     while wait_ok_count < _MAX_FAILURE_COUNT:
-        chk_ok = str(ser.readline().decode('utf-8'))
+        chk_ok = str(ser.readline().decode('utf-8', errors='replace'))
         logger.info("checking ok?: {}".format(chk_ok))
         if chk_ok.startswith("OK"):
             logger.info("OK!")
@@ -637,7 +641,7 @@ def sendCommand(command_str):
     if wait_ok_count >= _MAX_FAILURE_COUNT:
         state.failure_count += 1
     else:
-        line = str(ser.readline().decode('utf-8'))    # ERXUDPが来るはず
+        line = str(ser.readline().decode('utf-8', errors='replace'))    # ERXUDPが来るはず
         logger.info(line)
 
         # 受信データはたまに違うデータが来たり、
@@ -743,9 +747,8 @@ def speak(speech_text):
 if __name__ == '__main__':
     logger = logging.getLogger('Logging')
 
-    logname = "/var/log/tools/b-route.log"
     fmt = "%(asctime)s %(levelname)s %(name)s [%(thread)d][%(filename)s:%(lineno)d]: %(message)s"
-    logging.basicConfig(level=10, format=fmt)
+    logging.basicConfig(level=logging.INFO, format=fmt)
 
     logger.info("STARTING...")
     get_sb_device_list()
@@ -779,7 +782,7 @@ if __name__ == '__main__':
         scanEnd = False
         scan_counter = 0
         while not scanEnd:
-            line = str(ser.readline().decode('utf-8'))
+            line = str(ser.readline().decode('utf-8', errors='replace'))
             scan_counter += 1
             logger.info("counter: {}, {}".format(scan_counter, line))
 
@@ -812,29 +815,29 @@ if __name__ == '__main__':
 
     # スキャン結果からChannelを設定。
     ser.write(("SKSREG S2 " + scanRes["Channel"] + "\r\n").encode())
-    logger.info(str(ser.readline().decode('utf-8')))
-    logger.info(str(ser.readline().decode('utf-8')))
+    logger.info(str(ser.readline().decode('utf-8', errors='replace')))
+    logger.info(str(ser.readline().decode('utf-8', errors='replace')))
 
     # スキャン結果からPan IDを設定
     ser.write(("SKSREG S3 " + scanRes["Pan ID"] + "\r\n").encode())
-    logger.info(str(ser.readline().decode('utf-8')))
-    logger.info(str(ser.readline().decode('utf-8')))
+    logger.info(str(ser.readline().decode('utf-8', errors='replace')))
+    logger.info(str(ser.readline().decode('utf-8', errors='replace')))
 
     # MACアドレス(64bit)をIPV6リンクローカルアドレスに変換。
     # (BP35A1の機能を使って変換しているけど、単に文字列変換すればいいのではという話も？？)
     ser.write(("SKLL64 " + scanRes["Addr"] + "\r\n").encode())
-    logger.info(str(ser.readline().decode('utf-8')))
-    ipv6Addr = str(ser.readline().decode('utf-8')).strip()
+    logger.info(str(ser.readline().decode('utf-8', errors='replace')))
+    ipv6Addr = str(ser.readline().decode('utf-8', errors='replace')).strip()
 
     # PANA 接続シーケンスを開始します。
     ser.write(("SKJOIN " + ipv6Addr + "\r\n").encode())
-    logger.info(str(ser.readline().decode('utf-8')))
-    logger.info(str(ser.readline().decode('utf-8')))
+    logger.info(str(ser.readline().decode('utf-8', errors='replace')))
+    logger.info(str(ser.readline().decode('utf-8', errors='replace')))
 
     # PANA 接続完了待ち（10行ぐらいなんか返してくる）
     bConnected = False
     while not bConnected:
-        line = str(ser.readline().decode('utf-8'))
+        line = str(ser.readline().decode('utf-8', errors='replace'))
         if line.startswith("EVENT 24"):
             logger.error("PANA 接続失敗")
             ser.close()
@@ -848,7 +851,7 @@ if __name__ == '__main__':
 
     # スマートメーターがインスタンスリスト通知を投げてくる
     # (ECHONET-Lite_Ver.1.12_02.pdf p.4-16)
-    logger.info(str(ser.readline().decode('utf-8')))
+    logger.info(str(ser.readline().decode('utf-8', errors='replace')))
 
     counter = 30
 

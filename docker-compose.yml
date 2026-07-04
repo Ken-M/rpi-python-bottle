@@ -24,6 +24,7 @@ services:
       tty: false
       volumes:
        - ./app_measure:/home/bottle/app
+       - ./shared_config.py:/home/bottle/app/shared_config.py:ro
       group_add:
        - "20"   # ホスト側 dialout GID（Raspberry Pi OS デフォルト）
       devices:
@@ -55,6 +56,7 @@ services:
           condition: service_healthy
       volumes:
        - ./my_flask_app:/app
+       - ./shared_config.py:/app/shared_config.py:ro
       entrypoint:
        - /usr/local/bin/gunicorn
        - --workers=2
