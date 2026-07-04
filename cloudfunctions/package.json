@@ -1,6 +1,9 @@
 {
+  "engines": {
+    "node": ">=24"
+  },
   "dependencies": {
     "@google-cloud/bigquery": "^7.0.0",
-    "@google-cloud/functions-framework": "^3.1.0"
+    "@google-cloud/functions-framework": "^5.0.0"
   }
 }
