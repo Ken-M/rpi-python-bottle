@@ -174,11 +174,12 @@ PyPI ミラー（`pypi.flatt.tech`）経由で取得し、悪性パッケージ�
   ```bash
   TOKEN="$(grep -vE '^[[:space:]]*#' ../takumi_guard_token | grep -oE 'tg_[A-Za-z0-9_]+' | head -n1)"
   gcloud functions deploy regdata \
-    --source=. --runtime=nodejs22 --trigger-http \
+    --source=. --runtime=nodejs24 --trigger-http \
     --set-build-env-vars "TAKUMI_GUARD_TOKEN=${TOKEN}"
   ```
-- `package-lock.json` 再生成時も Guard 経由で:
-  `npm install --package-lock-only --registry=https://npm.flatt.tech/`
+- `package-lock.json` 再生成時も Guard 経由で。加えて**公開後 7 日以上経過したバージョンのみ**を
+  採用する（公開直後の悪性バージョン混入対策）ため `--before=<7日前の日付>` を付ける:
+  `npm install --package-lock-only --registry=https://npm.flatt.tech/ --before=<YYYY-MM-DD>`
 - 既知の課題: `@google-cloud/bigquery@^7` が脆弱な `uuid <11.1.1`（GHSA-w5hq-g745-h8pq, moderate）に
   依存。解消には `bigquery` の v8 への更新（破壊的変更）が必要なため、BigQuery 書き込みの動作確認と
   併せて別途対応する。
