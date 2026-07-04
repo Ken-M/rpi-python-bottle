@@ -22,7 +22,7 @@ Raspberry Pi 5 上で稼働する**電力計測・スマートホーム連携サ
 ├── README.md                   # 旧メモ（Python 3.5 時代。現在は本ファイルを参照）
 ├── .gitignore
 ├── app_measure/                # 電力計測・GCP 送信サービス
-│   ├── Dockerfile              # debian:trixie + Python 3.14.6 ソースビルド
+│   ├── Dockerfile              # python:3.14.6-slim ベース
 │   ├── get-power.py            # メインループ（スマートメーター通信・Redis 書き込み）
 │   ├── echonet.py              # ECHONET Lite コマンド定数（GET_NOW_POWER, GET_LATEST30）
 │   ├── gcp_environment_tmpl.py # GCP 設定テンプレート → gcp_environment.py を Pi 上に配置
@@ -47,7 +47,7 @@ Raspberry Pi 5 上で稼働する**電力計測・スマートホーム連携サ
 
 | サービス | コンテナ名 | IP | ポート | 役割 |
 |---|---|---|---|---|
-| redis | redis | 172.19.0.5 | 6379 | サービス間 KV ストア |
+| redis | redis | 172.19.0.5 | —（内部のみ） | サービス間 KV ストア |
 | measure-application | rpi-python-bottle-app-measure | 172.19.0.10 | — | スマートメーター通信・GCP 送信 |
 | my_flask_app | my_flask_app | 172.19.0.15 | 5000 | ホームダッシュボード |
 | ngrok | — | 172.19.0.20 | 4040 | 外部公開トンネル |
@@ -83,8 +83,11 @@ build-and-push.bat
 処理内容：
 1. `docker login`（Docker Hub 認証）
 2. buildx ビルダー `rpi-builder` を作成または再利用
-3. `app_measure` を `linux/arm64` でビルド＆プッシュ（**30〜60 分**）
+3. `app_measure` を `linux/arm64` でビルド＆プッシュ
 4. `my_flask_app` を `linux/arm64` でビルド＆プッシュ
+
+**両ビルドとも `--no-cache` 付き（意図的）**。毎回クリーンビルドを行う方針のため、
+Docker キャッシュは使わない。`--no-cache` を外さないこと。
 
 ### 個別ビルド
 
@@ -114,11 +117,12 @@ docker compose up -d
 
 ## 開発上の注意点
 
-### app_measure: Python ソースビルド（debian:trixie）
+### app_measure: ベースイメージ（python:3.14.6-slim）
 
-- ベースイメージ `debian:trixie` 上で **Python 3.14.6 をソースコンパイル**する
-- `ca-certificates` のインストールが**必須**。欠落すると `wget` が python.org の TLS 証明書検証に失敗してビルドが中断する（クロスビルド時も同様）
-- ビルド時間は 30〜60 分。Dockerfile を変更していなければ Docker キャッシュが効く
+- ベースイメージは `python:3.14.6-slim`（my_flask_app と共通）
+- 以前は `debian:trixie` 上で Python をソースコンパイルしていた（30〜60 分）が、
+  公式 slim イメージへ移行済み。ソースビルドに戻さないこと
+- ビルドは毎回クリーンビルド（`--no-cache`、意図的）。数分で完了する
 
 ### Rust は不要
 
@@ -133,7 +137,7 @@ docker compose up -d
 |---|---|
 | `app_measure/secret.py` | Bルート ID/パスワード、GCP SA キー、SwitchBot API キー等 |
 | `app_measure/gcp_environment.py` | GCP エンドポイント・対象オーディエンス等 |
-| `my_flask_app/my_flask_app_secret.py` | Basic 認証ユーザー辞書（`USER_DATA`） |
+| `my_flask_app/my_flask_app_secret.py` | Basic 認証ユーザー辞書（`USER_DATA`）。値は平文ではなく `werkzeug.security.generate_password_hash()` で生成したハッシュ文字列を設定する |
 | `ngrok/ngrok.yml` | ngrok 認証トークン・トンネル設定 |
 | `takumi_guard_token`（プロジェクトルート） | Takumi Guard の PyPI 認証トークン（`tg_anon_…`）。ビルド時に使用 |
 
@@ -181,6 +185,7 @@ PyPI ミラー（`pypi.flatt.tech`）経由で取得し、悪性パッケージ�
 
 ### my_flask_app ダッシュボード
 
+- 本番は **gunicorn** で起動する（docker-compose.yml の entrypoint。`app.run()` はローカル開発用）
 - `/get_data` — Redis から最新センサーデータを取得して HTML テーブルを返す
 - `/health` — `POWER` データが 1 分以内に更新されていれば 200、古ければ 503
 - ダークテーマ固定（CSS 変数 `--bg: #0f1117` ほか）。30 秒ごと自動リロード
@@ -192,7 +197,8 @@ PyPI ミラー（`pypi.flatt.tech`）経由で取得し、悪性パッケージ�
 `speak()` は `pychromecast` で Nest Hub を検索し、Google TTS（HTTPS）の MP3 を再生する。  
 接続再スキャンのコストを避けるため `_cast_cache` にデバイスリストをキャッシュする。  
 再生完了の検出は `has_played` フラグ + `player_state` の組み合わせで制御。  
-`googlehome.wait(timeout=5)` の戻り値を確認し、タイムアウト時はそのデバイスをスキップする。
+`googlehome.wait(timeout=5)` の戻り値を確認し、タイムアウト時はそのデバイスをスキップする。  
+通知には **30 秒のクールダウン**（`_SPEAK_COOLDOWN_SECONDS`）があり、電力超過が続いても連続再生はされない。
 
 ### ローカル git の注意
 

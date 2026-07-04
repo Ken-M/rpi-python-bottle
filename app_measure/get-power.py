@@ -46,6 +46,8 @@ _DATETIME_FORMAT_TZ = '%Y-%m-%dT%H:%M:%S%z'
 _DATE_FORMAT = '%Y-%m-%d'
 _MAX_FAILURE_COUNT = 5
 _JWT_EXP_MINS = 15
+_SPEAK_COOLDOWN_SECONDS = 30
+_REQUEST_TIMEOUT = 3.5
 
 
 @dataclass
@@ -57,6 +59,7 @@ class State:
     jwt_iat: Optional[datetime.datetime] = None
     last_instant_sent: Optional[datetime.datetime] = None
     last_switchbot_sent: Optional[datetime.datetime] = None
+    last_speak_sent: Optional[datetime.datetime] = None
     latest_instant_val: Optional[dict] = None
 
 
@@ -83,6 +86,15 @@ def _get_chromecasts():
 def try_resend():
     logger.info('resend check')
 
+    # 前回の処理がクラッシュ等で中断した場合、back ファイルが残っている。
+    # 中身を本体キューへ戻してから通常処理する（重複再送は BigQuery の insertId で排除される）。
+    if os.path.isfile(app_path + 'failed_message_back.txt'):
+        logger.warning('orphaned back file found, recovering')
+        with open(app_path + 'failed_message_back.txt', 'r') as bf, \
+                open(app_path + 'failed_message.txt', 'a') as mf:
+            mf.write(bf.read())
+        os.remove(app_path + 'failed_message_back.txt')
+
     if not os.path.isfile(app_path + 'failed_message.txt'):
         logger.info('no failed file')
         logger.info('fin resend check')
@@ -108,6 +120,9 @@ def try_resend():
                     writer.writerow([message[0]])
             time.sleep(1)
 
+    # 処理済みの back ファイルを残すと次回起動時に重複再送されるため削除する
+    os.remove(app_path + 'failed_message_back.txt')
+
     logger.info('fin resend check')
 
 
@@ -115,7 +130,7 @@ def create_jwt():
     seconds_since_issue = 60 * _JWT_EXP_MINS
 
     if state.jwt_iat is not None:
-        seconds_since_issue = (datetime.datetime.now(datetime.UTC) - state.jwt_iat).seconds
+        seconds_since_issue = (datetime.datetime.now(datetime.UTC) - state.jwt_iat).total_seconds()
 
     if seconds_since_issue < 60 * _JWT_EXP_MINS:
         logger.info('No need to refresh {}s'.format(seconds_since_issue))
@@ -144,13 +159,13 @@ def create_jwt():
 
     message = 'grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion={}'.format(temp_jwt)
 
-    resp = requests.post(auth_api, data=message, headers=headers, timeout=3.5)
-    logger.info("auth_token:")
-    logger.info(resp.json())
+    resp = requests.post(auth_api, data=message, headers=headers, timeout=_REQUEST_TIMEOUT)
 
-    if resp.status_code == requests.codes.ok:
-        state.jwt_iat = datetime.datetime.now(datetime.UTC)
-        logger.info('token refresh {}s'.format(state.jwt_iat))
+    if resp.status_code != requests.codes.ok:
+        raise RuntimeError('token refresh failed: {} {}'.format(resp.status_code, resp.text))
+
+    state.jwt_iat = datetime.datetime.now(datetime.UTC)
+    logger.info('token refresh {}s'.format(state.jwt_iat))
 
     return resp.json()['id_token']
 
@@ -167,7 +182,7 @@ def publish_message(json_body, jwt_token):
 
     logger.info("trig. cloud function.")
     logger.info(json.dumps(json_body))
-    resp = requests.post(audience, json=json_body, headers=headers, timeout=3.5)
+    resp = requests.post(audience, json=json_body, headers=headers, timeout=_REQUEST_TIMEOUT)
 
     if resp.status_code != 200:
         logger.warning('Response came back {}, retrying'.format(resp.status_code))
@@ -214,7 +229,6 @@ def create_switchbot_token():
         'nonce': str(nonce),
     }
 
-    logger.info("apiHeader: {}".format(api_header))
     return api_header
 
 
@@ -222,7 +236,7 @@ def create_switchbot_token():
     predicate=retry.if_exception_type(AssertionError),
     deadline=_BACKOFF_DURATION)
 def get_request(url, headers):
-    response = requests.get(url, headers=headers)
+    response = requests.get(url, headers=headers, timeout=_REQUEST_TIMEOUT)
     logger.info(response)
     logger.info(response.json())
 
@@ -358,7 +372,7 @@ def get_mining_status():
     total_power_usage = 0
 
     try:
-        resp = requests.get(miner_stat, timeout=3.5)
+        resp = requests.get(miner_stat, timeout=_REQUEST_TIMEOUT)
         logger.info(resp)
 
         if resp.status_code == 200:
@@ -412,7 +426,7 @@ def setCurrentElectricityPrice(timestamp):
     logger.info("Current electricity price: {}".format(current_electricity_price[0]))
     query_string = "&value=" + str(current_electricity_price[0])
     try:
-        resp = requests.post(miner_set_electricity_price + query_string, timeout=3.5)
+        resp = requests.post(miner_set_electricity_price + query_string, timeout=_REQUEST_TIMEOUT)
         logger.info(resp)
     except Exception as e:
         logger.warning("setCurrentElectricityPrice failed. {}".format(e))
@@ -432,8 +446,14 @@ def parseE7(EDT):
     body = body + "(" + datetime_str + ")"
 
     if intPower > 4800:
-        speak_string = "瞬時電力が" + str(intPower) + "ワットです。"
-        speak(speak_string)
+        # speak() はデバイスごとに最大10秒ブロックするため、
+        # クールダウンを設けて連続超過時の通知スパムとループ遅延を防ぐ
+        if (state.last_speak_sent is None or
+                (time_stamp - state.last_speak_sent) >=
+                datetime.timedelta(seconds=_SPEAK_COOLDOWN_SECONDS)):
+            speak_string = "瞬時電力が" + str(intPower) + "ワットです。"
+            speak(speak_string)
+            state.last_speak_sent = time_stamp
 
     if (state.last_instant_sent is not None and
             (time_stamp - state.last_instant_sent) < datetime.timedelta(seconds=15)):

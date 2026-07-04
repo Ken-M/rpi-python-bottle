@@ -2,8 +2,13 @@ services:
   redis:
     image: redis:latest
     container_name: redis
-    ports:
-      - "6379:6379"
+    # ポートはホストへ公開しない（コンテナ間は app_net 内で通信する）
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
     networks:
       app_net:
         ipv4_address: 172.19.0.5
@@ -14,12 +19,11 @@ services:
       image: kenonemorita/rpi-python-bottle-app-measure
       build: ./app_measure
       depends_on:
-        - redis
+        redis:
+          condition: service_healthy
       tty: false
       volumes:
        - ./app_measure:/home/bottle/app
-      environment:
-        CODEIGNITER_ENV: development
       group_add:
        - "20"   # ホスト側 dialout GID（Raspberry Pi OS デフォルト）
       devices:
@@ -47,12 +51,16 @@ services:
       image: kenonemorita/rpi-python-bottle-my-flask-app
       container_name: my_flask_app
       depends_on:
-        - redis
+        redis:
+          condition: service_healthy
       volumes:
        - ./my_flask_app:/app
       entrypoint:
-       - /usr/local/bin/python3
-       - /app/my_flask_app.py
+       - /usr/local/bin/gunicorn
+       - --workers=2
+       - --bind=0.0.0.0:5000
+       - --chdir=/app
+       - my_flask_app:app
       ports:
         - "5000:5000"  # Flask用のポートを公開
       networks:

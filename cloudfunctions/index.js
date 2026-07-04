@@ -1,40 +1,38 @@
 const functions = require('@google-cloud/functions-framework');
+const {BigQuery} = require('@google-cloud/bigquery');
 
-functions.http('regdata', (req, res) => {
+const bigquery = new BigQuery({ projectId: 'electric-238022' });
 
-  var json_obj = req.body;
-  var insert_obj = {
+functions.http('regdata', async (req, res) => {
+
+  const json_obj = req.body;
+  const insert_obj = {
     insertId: json_obj.DATETIME,
     json: json_obj
   };
   const options = {
-  raw: true
+    raw: true
   };
-  //----------------------------
-  // insert
-  //----------------------------
-  const {BigQuery} = require('@google-cloud/bigquery');
-  const bigquery = new BigQuery({ projectId: 'electric-238022' });
-  
-  var table_name = 'TBL_'+json_obj.TYPE;
-  
+
+  const table_name = 'TBL_' + json_obj.TYPE;
+
   console.log(table_name);
   console.log(insert_obj);
 
-  bigquery
-    .dataset('DATASET')
-    .table(table_name)
-    .insert(insert_obj, options)
-
-  .then(function(result) {
+  //----------------------------
+  // insert
+  //----------------------------
+  try {
+    await bigquery
+      .dataset('DATASET')
+      .table(table_name)
+      .insert(insert_obj, options);
 
     console.log('BQ INSERTED');
-    return 'BQ INSERTED';
-  })
-  .catch((err) => {
+    res.send('OK');
+  } catch (err) {
+    // 500 を返すと送信側（get-power.py）がリトライし、失敗時は再送キューに積まれる
     console.error('BQ ERROR : ', err);
-    throw new Error(err);
-  });
-
-  res.send(`OK`);
+    res.status(500).send('BQ ERROR');
+  }
 });
