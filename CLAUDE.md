@@ -18,6 +18,7 @@ Raspberry Pi 5 上で稼働する**電力計測・スマートホーム連携サ
 ```
 .
 ├── docker-compose.yml          # 全サービス定義（redis / app_measure / my_flask_app / ngrok）
+├── shared_config.py            # 電力単価・アラート閾値の共有設定（両アプリコンテナへ volume mount）
 ├── build-and-push.bat          # Windows 向け Docker Hub クロスビルド・プッシュスクリプト
 ├── README.md                   # 旧メモ（Python 3.5 時代。現在は本ファイルを参照）
 ├── .gitignore
@@ -124,6 +125,16 @@ docker compose up -d
   公式 slim イメージへ移行済み。ソースビルドに戻さないこと
 - ビルドは毎回クリーンビルド（`--no-cache`、意図的）。数分で完了する
 
+### 電力単価・アラート閾値の一元管理（shared_config.py）
+
+電力単価（夜間/昼間/生活時間帯）とアラート閾値（POWER 4800 W / CO2 1500 ppm）は
+プロジェクトルートの `shared_config.py` で定義し、docker-compose.yml で
+`app_measure` / `my_flask_app` 両コンテナのアプリディレクトリへ read-only mount して共有する。
+
+- 単価・閾値を変更する場合は `shared_config.py` のみ修正する（コード側に直書きしない）
+- volume mount のため**イメージ再ビルドは不要**。Pi 上で `git pull` →
+  `docker compose up -d`（コンテナ再作成）で反映される
+
 ### Rust は不要
 
 `cryptography` と `grpcio` はいずれも `linux/arm64` 向け pre-built wheel が PyPI に存在する。  
@@ -180,9 +191,6 @@ PyPI ミラー（`pypi.flatt.tech`）経由で取得し、悪性パッケージ�
 - `package-lock.json` 再生成時も Guard 経由で。加えて**公開後 7 日以上経過したバージョンのみ**を
   採用する（公開直後の悪性バージョン混入対策）ため `--before=<7日前の日付>` を付ける:
   `npm install --package-lock-only --registry=https://npm.flatt.tech/ --before=<YYYY-MM-DD>`
-- 既知の課題: `@google-cloud/bigquery@^7` が脆弱な `uuid <11.1.1`（GHSA-w5hq-g745-h8pq, moderate）に
-  依存。解消には `bigquery` の v8 への更新（破壊的変更）が必要なため、BigQuery 書き込みの動作確認と
-  併せて別途対応する。
 
 ### my_flask_app ダッシュボード
 
@@ -190,7 +198,7 @@ PyPI ミラー（`pypi.flatt.tech`）経由で取得し、悪性パッケージ�
 - `/get_data` — Redis から最新センサーデータを取得して HTML テーブルを返す
 - `/health` — `POWER` データが 1 分以内に更新されていれば 200、古ければ 503
 - ダークテーマ固定（CSS 変数 `--bg: #0f1117` ほか）。30 秒ごと自動リロード
-- POWER > 4800 W または CO2 > 1500 ppm でアラートバッジ＋点滅アニメーション
+- POWER > 4800 W または CO2 > 1500 ppm でアラートバッジ＋点滅アニメーション（閾値は `shared_config.py` で定義）
 - センサーグループ: Power and Plugs / Bedroom / Living Room / Study Room / 1F
 
 ### get-power.py の Nest Hub 通知（speak 関数）
