@@ -4,6 +4,7 @@ from werkzeug.security import check_password_hash
 import redis
 from datetime import datetime, timedelta
 from my_flask_app_secret import USER_DATA
+from shared_config import POWER_ALERT_THRESHOLD_W, CO2_ALERT_THRESHOLD_PPM
 
 auth = HTTPBasicAuth()
 app = Flask(__name__)
@@ -389,7 +390,7 @@ def get_data():
                                 <td class="value-column">
                                     {% if data[key] is mapping and 'value' in data[key] %}
                                         {% set raw = data[key]['value'] %}
-                                        {% set is_alert = (key == "POWER" and raw|float > 4800) or ("CO2" in key and raw|float > 1500) %}
+                                        {% set is_alert = (key == "POWER" and raw|float > power_alert_threshold) or ("CO2" in key and raw|float > co2_alert_threshold) %}
                                         <div class="value-wrap">
                                             {% if is_alert %}
                                                 <span class="badge badge-alert">
@@ -448,7 +449,9 @@ def get_data():
         </body>
         </html>
         """
-        return render_template_string(html_template, data=data, groups=groups, client_ip=client_ip, ranges=ranges, units=units)
+        return render_template_string(
+            html_template, data=data, groups=groups, client_ip=client_ip, ranges=ranges, units=units,
+            power_alert_threshold=POWER_ALERT_THRESHOLD_W, co2_alert_threshold=CO2_ALERT_THRESHOLD_PPM)
     except Exception as e:
         return f"Error: {str(e)}", 500
 
