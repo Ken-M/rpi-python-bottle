@@ -1,3 +1,6 @@
+__pycache__/
+*.pyc
+
 rsa_cert.pem
 rsa_private.pem
 secret.py

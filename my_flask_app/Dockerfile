@@ -15,5 +15,5 @@ WORKDIR /app
 RUN --mount=type=secret,id=takumi_guard_token \
     TG_TOKEN="$(grep -oE 'tg_[A-Za-z0-9_]+' /run/secrets/takumi_guard_token 2>/dev/null | head -n1)"; \
     export PIP_INDEX_URL="https://${TG_TOKEN:+token:${TG_TOKEN}@}pypi.flatt.tech/simple/"; \
-    pip3 install --no-cache-dir redis flask Flask-HTTPAuth pip-review && \
+    pip3 install --no-cache-dir redis flask Flask-HTTPAuth gunicorn pip-review && \
     pip-review --auto

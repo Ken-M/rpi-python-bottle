@@ -1,32 +1,14 @@
 # syntax=docker/dockerfile:1.7
-# Python は debian:trixie (Debian 13 stable) からソースビルド
-FROM --platform=$TARGETPLATFORM debian:trixie
+# python:3.14.6-slim (Debian ベース、arm64 対応) を使用。
+# 以前は debian:trixie 上で Python をソースビルドしていたが、
+# 公式 slim イメージで同一バージョンが提供されているため移行した（ビルド時間 30〜60 分 → 数分）。
+FROM python:3.14.6-slim
 
 USER root
 
-# ca-certificates を含む必要パッケージを一括インストール
-# ca-certificates は wget が python.org の TLS 証明書を検証するために必須
-RUN apt-get update && apt-get upgrade -y --no-install-recommends && \
-    apt-get install -y --no-install-recommends \
-        ca-certificates \
-        vim sudo wget curl net-tools git \
-        build-essential checkinstall \
-        libncursesw5-dev libgdbm-dev libc6-dev zlib1g-dev \
-        libsqlite3-dev tk-dev libssl-dev openssl \
-        libbz2-dev libreadline-dev liblzma-dev libffi-dev \
-        python3-dev pkg-config && \
-    apt-get -qy remove python3 python3-grpcio python3-grpc-tools && \
-    apt-get -qy autoremove && \
+RUN apt-get update && \
+    apt-get upgrade -y --no-install-recommends && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
-
-# Python 3.14.6 をソースからビルド・インストール後、ソースを削除
-WORKDIR /usr/local/src
-RUN wget https://www.python.org/ftp/python/3.14.6/Python-3.14.6.tar.xz && \
-    tar xvf Python-3.14.6.tar.xz && \
-    cd Python-3.14.6 && \
-    ./configure --enable-optimizations && \
-    make && make install && \
-    cd / && rm -rf /usr/local/src/Python-3.14.6 /usr/local/src/Python-3.14.6.tar.xz
 
 # pip をアップグレード
 # Takumi Guard (Shisho Guard) 経由で PyPI を取得しサプライチェーン攻撃を防ぐ。

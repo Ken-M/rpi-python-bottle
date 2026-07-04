@@ -1,5 +1,6 @@
 from flask import Flask, jsonify, Response, render_template_string, json, request
 from flask_httpauth import HTTPBasicAuth
+from werkzeug.security import check_password_hash
 import redis
 from datetime import datetime, timedelta
 from my_flask_app_secret import USER_DATA
@@ -10,9 +11,13 @@ app = Flask(__name__)
 
 @auth.verify_password
 def verify(username, password):
+    """USER_DATA の値は generate_password_hash() で生成したハッシュ文字列。"""
     if not (username and password):
         return False
-    return USER_DATA.get(username) == password
+    password_hash = USER_DATA.get(username)
+    if not password_hash:
+        return False
+    return check_password_hash(password_hash, password)
 
 # Redisクライアントのセットアップ
 redis_client = redis.StrictRedis(host='redis', port=6379, decode_responses=True)
