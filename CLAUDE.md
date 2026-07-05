@@ -190,7 +190,7 @@ PyPI ミラー（`pypi.flatt.tech`）経由で取得し、悪性パッケージ�
     ForEach-Object { $_.Matches[0].Value } |
     Select-Object -First 1
 
-  gcloud functions deploy regdata `
+  gcloud functions deploy my-api-to-bq `
     --source=. --runtime=nodejs24 --trigger-http `
     --set-build-env-vars "TAKUMI_GUARD_TOKEN=$TOKEN"
   ```
