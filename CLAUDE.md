@@ -204,8 +204,11 @@ PyPI ミラー（`pypi.flatt.tech`）経由で取得し、悪性パッケージ�
 - 本番は **gunicorn** で起動する（docker-compose.yml の entrypoint。`app.run()` はローカル開発用）
 - `/get_data` — Redis から最新センサーデータを取得して HTML テーブルを返す
 - `/health` — `POWER` データが 1 分以内に更新されていれば 200、古ければ 503
-- ダークテーマ固定（CSS 変数 `--bg: #0f1117` ほか）。30 秒ごと自動リロード
-- POWER > 4800 W または CO2 > 1500 ppm でアラートバッジ＋点滅アニメーション（閾値は `shared_config.py` で定義）
+- ライト/ダーク自動切替（`prefers-color-scheme`。CSS 変数で定義）
+- 30 秒ごとに `fetch` + DOM 差し替えで更新（フルリロードなし。タブ非表示中は停止、失敗時はフルリロードにフォールバック）
+- 瞬時電力はページ上部のヒーローカードに大きく表示（アラート閾値マーカー付きゲージ）
+- POWER > 4800 W または CO2 > 1500 ppm でアラートバッジ＋点滅アニメーション、閾値の 80% 以上で警告（黄色）バッジ（閾値は `shared_config.py` で定義）
+- センサー名はアイコン＋表示名で表示（生の Redis キーはツールチップ）。`Updated At` は相対時刻表示、5 分以上前のデータは黄色で強調
 - センサーグループ: Power and Plugs / Bedroom / Living Room / Study Room / 1F
 
 ### get-power.py の Nest Hub 通知（speak 関数）
