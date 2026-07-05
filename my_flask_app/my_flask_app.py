@@ -107,9 +107,20 @@ def get_data():
             if "PLUG" in key:        return "W"
             return ""
 
+        def _sensor_label(key):
+            if key == "POWER":       return ("⚡", "Instant Power")
+            if key == "KEN_PLUG":    return ("🔌", "Ken's Plug")
+            if key == "YACHI_PLUG":  return ("🔌", "Yachi's Plug")
+            if "TEMPERATURE" in key: return ("🌡️", "Temperature")
+            if "HUMIDITY" in key:    return ("💧", "Humidity")
+            if "CO2" in key:         return ("🫧", "CO₂")
+            if "LIGHT_LEVEL" in key: return ("☀️", "Light Level")
+            return ("", key)
+
         all_keys = [k for ks in groups.values() for k in ks]
         ranges = {k: _sensor_range(k) for k in all_keys if _sensor_range(k)}
         units  = {k: _sensor_unit(k)  for k in all_keys}
+        labels = {k: _sensor_label(k) for k in all_keys}
 
         # JSONをHTMLテーブルとして表示するテンプレート
         html_template = """
@@ -282,12 +293,12 @@ def get_data():
                 }
                 td.key-column {
                     width: 30%;
-                    color: var(--text-muted);
-                    font-size: 0.82rem;
+                    color: var(--text);
+                    font-size: 0.85rem;
                     font-weight: 500;
-                    font-family: 'SF Mono', 'Fira Code', monospace;
-                    letter-spacing: 0.01em;
+                    cursor: help;
                 }
+                .sensor-icon { margin-right: 7px; }
                 td.value-column {
                     width: 40%;
                     font-weight: 600;
@@ -299,6 +310,72 @@ def get_data():
                     color: var(--text-muted);
                     font-size: 0.76rem;
                     font-variant-numeric: tabular-nums;
+                }
+                td.updated-at-column.stale {
+                    color: var(--amber);
+                    font-weight: 600;
+                }
+                .hero {
+                    display: flex;
+                    align-items: center;
+                    gap: 28px;
+                    flex-wrap: wrap;
+                    padding: 20px 24px;
+                    margin-bottom: 28px;
+                }
+                .hero-label {
+                    font-size: 0.78rem;
+                    font-weight: 600;
+                    text-transform: uppercase;
+                    letter-spacing: 0.08em;
+                    color: var(--text-muted);
+                    margin-bottom: 6px;
+                }
+                .hero-value {
+                    font-size: 2.6rem;
+                    font-weight: 800;
+                    letter-spacing: -0.03em;
+                    line-height: 1;
+                    font-variant-numeric: tabular-nums;
+                }
+                .hero-value.warn { color: var(--amber); }
+                .hero-value.alert { color: var(--red); animation: pulse 1.8s ease-in-out infinite; }
+                .hero-unit {
+                    font-size: 1rem;
+                    font-weight: 500;
+                    color: var(--text-muted);
+                    margin-left: 5px;
+                }
+                .hero-bar-wrap { flex: 1; min-width: 220px; }
+                .hero-bar {
+                    position: relative;
+                    height: 10px;
+                    background: var(--surface2);
+                    border: 1px solid var(--border);
+                    border-radius: 6px;
+                    overflow: hidden;
+                }
+                .hero-bar-fill {
+                    height: 100%;
+                    border-radius: 6px;
+                    background: linear-gradient(90deg, #22c55e, #4ade80);
+                    transition: width 0.6s cubic-bezier(.4,0,.2,1);
+                }
+                .hero-bar-fill.warn { background: linear-gradient(90deg, #22c55e, var(--amber)); }
+                .hero-bar-fill.alert { background: linear-gradient(90deg, var(--amber), var(--red)); }
+                .hero-tick {
+                    position: absolute;
+                    top: 0; bottom: 0;
+                    width: 2px;
+                    background: var(--red);
+                    opacity: 0.7;
+                }
+                .hero-scale {
+                    display: flex;
+                    justify-content: space-between;
+                    font-size: 0.7rem;
+                    color: var(--text-muted);
+                    margin-top: 6px;
                 }
                 .badge {
                     display: inline-flex;
@@ -313,6 +390,11 @@ def get_data():
                     background: rgba(34,197,94,0.12);
                     color: var(--green);
                     border: 1px solid rgba(34,197,94,0.25);
+                }
+                .badge-warn {
+                    background: rgba(217,119,6,0.12);
+                    color: var(--amber);
+                    border: 1px solid rgba(217,119,6,0.3);
                 }
                 .badge-alert {
                     background: var(--red-glow);
@@ -367,6 +449,31 @@ def get_data():
             </header>
             <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:100%"></div></div>
 
+            <main id="content">
+            {% if data.get('POWER') is mapping and 'value' in data['POWER'] %}
+            {% set pv = data['POWER']['value']|float %}
+            {% set ppct = [[(pv / 6000 * 100)|int, 0]|max, 100]|min %}
+            {% set tickpct = (power_alert_threshold / 6000 * 100)|int %}
+            {% set pstate = 'alert' if pv > power_alert_threshold else ('warn' if pv >= power_alert_threshold * 0.8 else '') %}
+            <div class="card hero">
+                <div>
+                    <div class="hero-label">&#9889; Instant Power</div>
+                    <div class="hero-value {{ pstate }}">{{ data['POWER']['value'] }}<span class="hero-unit">W</span></div>
+                </div>
+                <div class="hero-bar-wrap">
+                    <div class="hero-bar">
+                        <div class="hero-bar-fill {{ pstate }}" style="width:{{ ppct }}%"></div>
+                        <div class="hero-tick" style="left:{{ tickpct }}%"></div>
+                    </div>
+                    <div class="hero-scale">
+                        <span>0 W</span>
+                        <span>alert {{ power_alert_threshold }} W</span>
+                        <span>6000 W</span>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
             {% for group_name, keys in groups.items() %}
             <div class="section">
                 <div class="section-header">
@@ -386,15 +493,20 @@ def get_data():
                             {% for key in keys %}
                             {% if key in data %}
                             <tr>
-                                <td class="key-column">{{ key }}</td>
+                                <td class="key-column" title="{{ key }}"><span class="sensor-icon">{{ labels[key][0] }}</span>{{ labels[key][1] }}</td>
                                 <td class="value-column">
                                     {% if data[key] is mapping and 'value' in data[key] %}
                                         {% set raw = data[key]['value'] %}
                                         {% set is_alert = (key == "POWER" and raw|float > power_alert_threshold) or ("CO2" in key and raw|float > co2_alert_threshold) %}
+                                        {% set is_warn = not is_alert and ((key == "POWER" and raw|float >= power_alert_threshold * 0.8) or ("CO2" in key and raw|float >= co2_alert_threshold * 0.8)) %}
                                         <div class="value-wrap">
                                             {% if is_alert %}
                                                 <span class="badge badge-alert">
                                                     {% if key == "POWER" %}&#9889;{% else %}&#9888;{% endif %}
+                                                    {{ raw }}<span class="unit">{{ units.get(key, '') }}</span>
+                                                </span>
+                                            {% elif is_warn %}
+                                                <span class="badge badge-warn">
                                                     {{ raw }}<span class="unit">{{ units.get(key, '') }}</span>
                                                 </span>
                                             {% else %}
@@ -415,13 +527,11 @@ def get_data():
                                         <span class="badge badge-normal">{{ data[key] }}</span>
                                     {% endif %}
                                 </td>
-                                <td class="updated-at-column">
-                                    {% if data[key] is mapping and 'updated_at' in data[key] %}
-                                        {{ data[key]['updated_at'] }}
-                                    {% else %}
-                                        —
-                                    {% endif %}
-                                </td>
+                                {% if data[key] is mapping and 'updated_at' in data[key] %}
+                                <td class="updated-at-column" data-updated="{{ data[key]['updated_at'] }}" title="{{ data[key]['updated_at'] }}">{{ data[key]['updated_at'] }}</td>
+                                {% else %}
+                                <td class="updated-at-column">—</td>
+                                {% endif %}
                             </tr>
                             {% endif %}
                             {% endfor %}
@@ -430,27 +540,69 @@ def get_data():
                 </div>
             </div>
             {% endfor %}
+            </main>
 
             <script>
-                let countdown = 30;
+                const REFRESH_SEC = 30;
+                let countdown = REFRESH_SEC;
                 const countdownEl = document.getElementById('countdown');
                 const lastReloadEl = document.getElementById('lastReload');
                 const progressFill = document.getElementById('progressFill');
 
-                lastReloadEl.textContent = new Date().toLocaleString('ja-JP');
+                function fmtRel(s) {
+                    if (s < 60) return s + 's ago';
+                    if (s < 3600) return Math.floor(s / 60) + 'm ago';
+                    if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+                    return Math.floor(s / 86400) + 'd ago';
+                }
+
+                function applyRelativeTimes() {
+                    document.querySelectorAll('[data-updated]').forEach(el => {
+                        const t = Date.parse(el.dataset.updated.replace(' ', 'T'));
+                        if (isNaN(t)) { el.textContent = el.dataset.updated; return; }
+                        const s = Math.max(0, Math.floor((Date.now() - t) / 1000));
+                        el.textContent = fmtRel(s);
+                        el.classList.toggle('stale', s > 300);
+                    });
+                }
+
+                async function refresh() {
+                    try {
+                        const res = await fetch(location.href, { cache: 'no-store' });
+                        if (!res.ok) throw new Error('HTTP ' + res.status);
+                        const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+                        const fresh = doc.getElementById('content');
+                        if (!fresh) throw new Error('unexpected response');
+                        document.getElementById('content').innerHTML = fresh.innerHTML;
+                        lastReloadEl.textContent = new Date().toLocaleTimeString('ja-JP');
+                        applyRelativeTimes();
+                    } catch (e) {
+                        location.reload();
+                    }
+                }
+
+                lastReloadEl.textContent = new Date().toLocaleTimeString('ja-JP');
+                applyRelativeTimes();
 
                 setInterval(() => {
+                    if (document.hidden) return;
                     countdown--;
+                    if (countdown <= 0) { countdown = REFRESH_SEC; refresh(); }
                     countdownEl.textContent = countdown;
-                    progressFill.style.width = (countdown / 30 * 100) + '%';
-                    if (countdown <= 0) location.reload();
+                    progressFill.style.width = (countdown / REFRESH_SEC * 100) + '%';
+                    applyRelativeTimes();
                 }, 1000);
+
+                document.addEventListener('visibilitychange', () => {
+                    if (!document.hidden) { countdown = REFRESH_SEC; refresh(); }
+                });
             </script>
         </body>
         </html>
         """
         return render_template_string(
             html_template, data=data, groups=groups, client_ip=client_ip, ranges=ranges, units=units,
+            labels=labels,
             power_alert_threshold=POWER_ALERT_THRESHOLD_W, co2_alert_threshold=CO2_ALERT_THRESHOLD_PPM)
     except Exception as e:
         return f"Error: {str(e)}", 500
