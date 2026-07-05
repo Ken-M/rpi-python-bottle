@@ -48,7 +48,7 @@ Raspberry Pi 5 上で稼働する**電力計測・スマートホーム連携サ
 
 | サービス | コンテナ名 | IP | ポート | 役割 |
 |---|---|---|---|---|
-| redis | redis | 172.19.0.5 | —（内部のみ） | サービス間 KV ストア |
+| redis | redis | 172.19.0.5 | 127.0.0.1:6379（ループバック限定） | サービス間 KV ストア。同一 Pi 上の Freenove ケースキット（power_state.py）もループバック経由で参照 |
 | measure-application | rpi-python-bottle-app-measure | 172.19.0.10 | — | スマートメーター通信・GCP 送信 |
 | my_flask_app | my_flask_app | 172.19.0.15 | 5000 | ホームダッシュボード |
 | ngrok | — | 172.19.0.20 | 4040 | 外部公開トンネル |
