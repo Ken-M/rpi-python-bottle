@@ -181,13 +181,20 @@ PyPI ミラー（`pypi.flatt.tech`）経由で取得し、悪性パッケージ�
 - **トークン注入**: `.npmrc` の `//npm.flatt.tech/:_authToken=${TAKUMI_GUARD_TOKEN}` は
   環境変数参照のみでトークン値を含まない（コミット安全）。デプロイ時に `takumi_guard_token` と同じ
   トークン値を **ビルド環境変数** `TAKUMI_GUARD_TOKEN` で渡す。未設定なら匿名モード（ブロックのみ）。
-- **デプロイ例**:
-  ```bash
-  TOKEN="$(grep -vE '^[[:space:]]*#' ../takumi_guard_token | grep -oE 'tg_[A-Za-z0-9_]+' | head -n1)"
-  gcloud functions deploy regdata \
-    --source=. --runtime=nodejs24 --trigger-http \
-    --set-build-env-vars "TAKUMI_GUARD_TOKEN=${TOKEN}"
+- **デプロイ例**（Windows / PowerShell + Google Cloud CLI。`cloudfunctions/` ディレクトリで実行）:
+  ```powershell
+  # takumi_guard_token からトークン値を抽出（コメント行を除外し tg_… を取得）
+  $TOKEN = Get-Content ..\takumi_guard_token |
+    Where-Object { $_ -notmatch '^\s*#' } |
+    Select-String -Pattern 'tg_[A-Za-z0-9_]+' |
+    ForEach-Object { $_.Matches[0].Value } |
+    Select-Object -First 1
+
+  gcloud functions deploy regdata `
+    --source=. --runtime=nodejs24 --trigger-http `
+    --set-build-env-vars "TAKUMI_GUARD_TOKEN=$TOKEN"
   ```
+  事前に `gcloud auth login` / `gcloud config set project <プロジェクト ID>` を済ませておくこと。
 - `package-lock.json` 再生成時も Guard 経由で。加えて**公開後 7 日以上経過したバージョンのみ**を
   採用する（公開直後の悪性バージョン混入対策）ため `--before=<7日前の日付>` を付ける:
   `npm install --package-lock-only --registry=https://npm.flatt.tech/ --before=<YYYY-MM-DD>`
