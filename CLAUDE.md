@@ -23,13 +23,13 @@ Raspberry Pi 5 上で稼働する**電力計測・スマートホーム連携サ
 ├── README.md                   # 旧メモ（Python 3.5 時代。現在は本ファイルを参照）
 ├── .gitignore
 ├── app_measure/                # 電力計測・GCP 送信サービス
-│   ├── Dockerfile              # python:3.14.6-slim ベース
+│   ├── Dockerfile              # python:3.14.7-slim ベース
 │   ├── get-power.py            # メインループ（スマートメーター通信・Redis 書き込み）
 │   ├── echonet.py              # ECHONET Lite コマンド定数（GET_NOW_POWER, GET_LATEST30）
 │   ├── gcp_environment_tmpl.py # GCP 設定テンプレート → gcp_environment.py を Pi 上に配置
 │   └── secret_tmpl.py          # 認証情報テンプレート → secret.py を Pi 上に配置
 ├── my_flask_app/               # ホームダッシュボード Flask アプリ
-│   ├── Dockerfile              # python:3.14.6-slim ベース
+│   ├── Dockerfile              # python:3.14.7-slim ベース
 │   ├── my_flask_app.py         # Flask 本体（Redis 読み取り・HTML レンダリング）
 │   └── my_flask_app_tmpl.py    # 認証情報テンプレート → my_flask_app_secret.py を Pi 上に配置
 ├── cloudfunctions/             # GCP Cloud Functions（Node.js）
@@ -118,9 +118,9 @@ docker compose up -d
 
 ## 開発上の注意点
 
-### app_measure: ベースイメージ（python:3.14.6-slim）
+### app_measure: ベースイメージ（python:3.14.7-slim）
 
-- ベースイメージは `python:3.14.6-slim`（my_flask_app と共通）
+- ベースイメージは `python:3.14.7-slim`（my_flask_app と共通）
 - 以前は `debian:trixie` 上で Python をソースコンパイルしていた（30〜60 分）が、
   公式 slim イメージへ移行済み。ソースビルドに戻さないこと
 - ビルドは毎回クリーンビルド（`--no-cache`、意図的）。数分で完了する
@@ -198,6 +198,13 @@ PyPI ミラー（`pypi.flatt.tech`）経由で取得し、悪性パッケージ�
 - `package-lock.json` 再生成時も Guard 経由で。加えて**公開後 7 日以上経過したバージョンのみ**を
   採用する（公開直後の悪性バージョン混入対策）ため `--before=<7日前の日付>` を付ける:
   `npm install --package-lock-only --registry=https://npm.flatt.tech/ --before=<YYYY-MM-DD>`
+- `npm install` は直接依存しか更新しない。推移的依存（脆弱性修正が来るのは大半こちら）まで
+  semver 範囲内で上げるには続けて
+  `npm update --package-lock-only --before=<YYYY-MM-DD>` を実行し、`npm audit` で 0 件を確認する。
+- 再生成後の後始末（npm 11 系の挙動）:
+  - `resolved` が `https://npm.flatt.tech/…` に書き換わるので `https://registry.npmjs.org/…` へ戻す
+    （上記の replace-registry-host 方式を維持するため。`integrity` は registry 非依存なので変更不要）
+  - lockfile の改行は **CRLF**。テキスト処理で LF に変換しないこと（全行差分になる）
 
 ### my_flask_app ダッシュボード
 

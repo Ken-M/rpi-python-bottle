@@ -24,7 +24,7 @@ if %ERRORLEVEL% neq 0 (
 )
 
 REM [3/4] Build & push measure-application
-REM       python:3.14.6-slim base
+REM       python:3.14.7-slim base
 REM       NOTE: --no-cache is intentional (always clean build)
 echo [3/4] Building measure-application (linux/arm64)...
 docker buildx build ^
@@ -41,7 +41,7 @@ if %ERRORLEVEL% neq 0 (
 )
 
 REM [4/4] Build & push my_flask_app
-REM       python:3.14.6-slim base (lightweight and fast)
+REM       python:3.14.7-slim base (lightweight and fast)
 REM       NOTE: --no-cache is intentional (always clean build)
 echo [4/4] Building my_flask_app (linux/arm64)...
 docker buildx build ^
