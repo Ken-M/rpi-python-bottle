@@ -204,7 +204,12 @@ PyPI ミラー（`pypi.flatt.tech`）経由で取得し、悪性パッケージ�
 - 再生成後の後始末（npm 11 系の挙動）:
   - `resolved` が `https://npm.flatt.tech/…` に書き換わるので `https://registry.npmjs.org/…` へ戻す
     （上記の replace-registry-host 方式を維持するため。`integrity` は registry 非依存なので変更不要）
-  - lockfile の改行は **CRLF**。テキスト処理で LF に変換しないこと（全行差分になる）
+  - lockfile と `package.json` の改行は **CRLF**（リポジトリ内も CRLF。`core.autocrlf` は無効）。npm 11 系は
+    `npm install` で両ファイルを LF に書き換えるので、`resolved` の修正と併せて CRLF へ戻すこと
+    （LF のままだと全行差分になる）
+- `@google-cloud/bigquery` の変更履歴は 9.x から
+  [google-cloud-node/handwritten/bigquery/CHANGELOG.md](https://github.com/googleapis/google-cloud-node/blob/main/handwritten/bigquery/CHANGELOG.md)
+  にある（旧リポジトリ nodejs-bigquery の CHANGELOG は 8.x で止まっている）
 
 ### my_flask_app ダッシュボード
 
