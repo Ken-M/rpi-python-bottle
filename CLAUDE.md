@@ -30,7 +30,9 @@ Raspberry Pi 5 上で稼働する**電力計測・スマートホーム連携サ
 │   └── secret_tmpl.py          # 認証情報テンプレート → secret.py を Pi 上に配置
 ├── my_flask_app/               # ホームダッシュボード Flask アプリ
 │   ├── Dockerfile              # python:3.14.7-slim ベース
-│   ├── my_flask_app.py         # Flask 本体（Redis 読み取り・HTML レンダリング）
+│   ├── my_flask_app.py         # Flask 本体（Redis 読み取り・表示モデル組み立て）
+│   ├── templates/
+│   │   └── dashboard.html      # ダッシュボードの HTML / CSS / JS（Jinja2 テンプレート）
 │   └── my_flask_app_tmpl.py    # 認証情報テンプレート → my_flask_app_secret.py を Pi 上に配置
 ├── cloudfunctions/             # GCP Cloud Functions（Node.js）
 │   ├── index.js
@@ -214,14 +216,48 @@ PyPI ミラー（`pypi.flatt.tech`）経由で取得し、悪性パッケージ�
 ### my_flask_app ダッシュボード
 
 - 本番は **gunicorn** で起動する（docker-compose.yml の entrypoint。`app.run()` はローカル開発用）
-- `/get_data` — Redis から最新センサーデータを取得して HTML テーブルを返す
+- `/get_data` — Redis から最新センサーデータを取得してダッシュボードを返す
 - `/health` — `POWER` データが 1 分以内に更新されていれば 200、古ければ 503
-- ライト/ダーク自動切替（`prefers-color-scheme`。CSS 変数で定義）
-- 30 秒ごとに `fetch` + DOM 差し替えで更新（フルリロードなし。タブ非表示中は停止、失敗時はフルリロードにフォールバック）
-- 瞬時電力はページ上部のヒーローカードに大きく表示（アラート閾値マーカー付きゲージ）
-- POWER > 4800 W または CO2 > 1500 ppm でアラートバッジ＋点滅アニメーション、閾値の 80% 以上で警告（黄色）バッジ（閾値は `shared_config.py` で定義）
-- センサー名はアイコン＋表示名で表示（生の Redis キーはツールチップ）。`Updated At` は相対時刻表示、5 分以上前のデータは黄色で強調
-- センサーグループ: Power and Plugs / Bedroom / Living Room / Study Room / 1F
+
+#### ファイル分担
+
+HTML / CSS / JS は `my_flask_app/templates/dashboard.html`（Jinja2）に置き、
+`my_flask_app.py` は Redis のデータを**表示モデル**（`build_view()`）へ変換する役に徹する。
+テンプレート側で数値計算や閾値判定をしないこと。
+
+Dockerfile はアプリを COPY しておらず `./my_flask_app` を丸ごと volume mount しているため、
+テンプレートを足しても**イメージ再ビルドは不要**（`git pull` → `docker compose up -d`）。
+
+#### 画面設計の方針
+
+計器盤のメタファー。無彩色を基調とし、**色は状態（警告・警報）にだけ使う**。
+
+- 瞬時電力が画面の主役。液晶パネル風の面に大きな数値を右揃えで置き、
+  その下に 0〜6000 W のリニアスケール（1000 W ごとの刻み＋警報点の赤い基線）を敷く
+- 個別プラグは「家全体の消費の内訳」として同じ計器パネル内に並べる
+- 部屋の空気は **部屋 × 測定項目のマトリクス表**。列が揃うので部屋どうしを目で比較できる
+  （`<th scope="col">` に部屋名、`<th scope="row">` に測定項目）
+- バー（`.track`）は「警報点までの余裕」を示す装置なので、**閾値を持つ項目（POWER / CO2）にだけ**付ける。
+  温度・湿度・照度には付けない
+- POWER > 4800 W / CO2 > 1500 ppm で警報色、閾値の 80% 以上で警告色（閾値は `shared_config.py`）。
+  警報は色だけでなく計器下の文言でも示す
+- 生の Redis キーはツールチップ（`title`）で確認できる
+
+#### 実装上の約束
+
+- `<meta name="color-scheme" content="light dark">` と `:root { color-scheme: light dark }` は
+  ブラウザ既定 UI の追随と初期描画の白フラッシュ抑止に必要。削除しないこと
+- 配色トークンは `light-dark()` を使い、非対応ブラウザ向けに
+  `prefers-color-scheme` のフォールバックを併記する（3 ブロック構成）
+- レイアウトの分岐は `main` に張った**コンテナクエリ**（`container: page / inline-size`）で行う。
+  ショートハンドは `名前 / 型` の順であることに注意（逆に書くと宣言ごと無効になる）
+- 30 秒ごとに `fetch` + `#content` の差し替えで更新（フルリロードなし。タブ非表示中は停止）。
+  差し替えは View Transitions でクロスフェードし、`prefers-reduced-motion` では無効化する。
+  遷移が中断されたときの未処理 promise 拒否を避けるため `ready` / `finished` を `catch` すること
+- 定期更新とタブ復帰が重なると遷移どうしが潰し合うため、`refreshing` フラグで多重実行を防ぐ
+- 通信失敗時はフルリロードせず、ヘッダのインジケータを「切断」に変えて再試行を続ける
+- 読み上げ（`role="status"`）は**警報状態が変わったときだけ**。毎回の更新は通知しない
+- `Last seen` は相対時刻表示、5 分以上前のデータは警告色で強調
 
 ### get-power.py の Nest Hub 通知（speak 関数）
 

@@ -1,4 +1,5 @@
-from flask import Flask, jsonify, Response, render_template_string, json, request
+from functools import wraps
+from flask import Flask, jsonify, json, render_template, request
 from flask_httpauth import HTTPBasicAuth
 from werkzeug.security import check_password_hash
 import redis
@@ -8,6 +9,35 @@ from shared_config import POWER_ALERT_THRESHOLD_W, CO2_ALERT_THRESHOLD_PPM
 
 auth = HTTPBasicAuth()
 app = Flask(__name__)
+
+# ダッシュボードの自動更新間隔 [秒]
+REFRESH_SECONDS = 30
+
+# 瞬時電力の計器スケール上限 [W]／目盛りの刻み [W]
+POWER_SCALE_MAX_W = 6000
+POWER_SCALE_STEP_W = 1000
+
+# 閾値の何割から「警告」表示にするか
+WARN_RATIO = 0.8
+
+# 個別計測プラグ（計器パネルに内訳として並べる）
+PLUG_KEYS = ("KEN_PLUG", "YACHI_PLUG")
+
+# 部屋の空気は「部屋 × 測定項目」の表にする。列を揃えることで部屋どうしを
+# 目で比較できる（どの部屋の CO2 が高いか、が一目で分かる）。
+# Redis のキーは "<測定項目>_<部屋>" 形式。
+ROOMS = (
+    ("Bedroom", "BEDROOM"),
+    ("Living Room", "LIVING"),
+    ("Study Room", "STUDY"),
+    ("1F", "1F"),
+)
+MEASURES = (
+    ("Temp", "TEMPERATURE"),
+    ("Humidity", "HUMIDITY"),
+    ("CO₂", "CO2"),
+    ("Light", "LIGHT_LEVEL"),
+)
 
 
 @auth.verify_password
@@ -61,7 +91,162 @@ def validate_power_data(data):
 
     return True
 
+
+# --------------------------------------------------------------------------
+# 表示用ヘルパー
+# テンプレート側で計算せずに済むよう、ここで表示モデルを組み立てる。
+# --------------------------------------------------------------------------
+
+def sensor_meta(key):
+    """センサーキーから (表示名, 単位, 目盛りレンジ) を返す。
+
+    目盛り（バー）は「警報点までどれだけ余裕があるか」を示す装置なので、
+    閾値を持つ POWER と CO2 にだけレンジを与える。それ以外は数値のみ。
+    """
+    if key == "KEN_PLUG":          return ("Ken's plug", "W", None)
+    if key == "YACHI_PLUG":        return ("Yachi's plug", "W", None)
+    if "TEMPERATURE" in key:       return ("Temp", "°C", None)
+    if "HUMIDITY" in key:          return ("Humidity", "%", None)
+    if "CO2" in key:               return ("CO₂", "ppm", (400, CO2_ALERT_THRESHOLD_PPM))
+    if "LIGHT_LEVEL" in key:       return ("Light", "", None)
+    if key == "POWER":             return ("Power", "W", (0, POWER_SCALE_MAX_W))
+    return (key, "", None)
+
+
+def as_float(value):
+    """数値として解釈できれば float、できなければ None。"""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def format_number(value):
+    """1284.0 → '1,284'、24.1 → '24.1'。数値でなければそのまま文字列化。"""
+    number = as_float(value)
+    if number is None:
+        return str(value)
+    if number % 1:
+        return f"{number:,.1f}"
+    return f"{number:,.0f}"
+
+
+def scale_percent(number, low, high):
+    """レンジ内の位置を 0〜100 の整数で返す。"""
+    if number is None or high == low:
+        return None
+    return max(0, min(100, round((number - low) / (high - low) * 100)))
+
+
+def alert_state(key, number):
+    """閾値に対する状態を '' / 'warn' / 'alert' で返す。閾値を持たないセンサーは常に ''。"""
+    if number is None:
+        return ""
+    if key == "POWER":
+        threshold = POWER_ALERT_THRESHOLD_W
+    elif "CO2" in key:
+        threshold = CO2_ALERT_THRESHOLD_PPM
+    else:
+        return ""
+    if number > threshold:
+        return "alert"
+    if number >= threshold * WARN_RATIO:
+        return "warn"
+    return ""
+
+
+def build_reading(key, entry):
+    """Redis の 1 エントリを表示モデルへ変換する。データが無ければ None。"""
+    if not isinstance(entry, dict) or "value" not in entry:
+        return None
+    label, unit, value_range = sensor_meta(key)
+    number = as_float(entry["value"])
+    return {
+        "key": key,
+        "label": label,
+        "unit": unit,
+        "text": format_number(entry["value"]),
+        "pct": scale_percent(number, *value_range) if value_range else None,
+        "state": alert_state(key, number),
+        "updated_at": entry.get("updated_at"),
+    }
+
+
+def build_hero(entry):
+    """瞬時電力の計器表示モデル。POWER が無ければ None。"""
+    reading = build_reading("POWER", entry)
+    if reading is None:
+        return None
+    number = as_float(entry["value"])
+    if number is None:
+        # 数値として読めない値で目盛りを描くと 0 W に見えてしまうので、値だけ出す
+        return {
+            "text": reading["text"],
+            "state": "",
+            "note": "The meter returned a value that could not be read.",
+            "updated_at": reading["updated_at"],
+            "pct": None,
+        }
+    state = reading["state"]
+    if state == "alert":
+        note = f"Over the {POWER_ALERT_THRESHOLD_W:,} W alarm point."
+    elif state == "warn":
+        note = f"Nearing the {POWER_ALERT_THRESHOLD_W:,} W alarm point."
+    else:
+        note = f"Under the {POWER_ALERT_THRESHOLD_W:,} W alarm point."
+    return {
+        "text": reading["text"],
+        "state": state,
+        "note": note,
+        "updated_at": reading["updated_at"],
+        "pct": scale_percent(number, 0, POWER_SCALE_MAX_W) or 0,
+        "alarm_pct": scale_percent(POWER_ALERT_THRESHOLD_W, 0, POWER_SCALE_MAX_W),
+        "alarm_text": f"{POWER_ALERT_THRESHOLD_W:,}",
+        "step_pct": round(POWER_SCALE_STEP_W / POWER_SCALE_MAX_W * 100, 3),
+        "max": f"{POWER_SCALE_MAX_W:,}",
+    }
+
+
+def build_matrix(data):
+    """部屋 × 測定項目の表を組み立てる。値が 1 つも無い行・列は落とす。"""
+    columns = [
+        (name, suffix) for name, suffix in ROOMS
+        if any(f"{prefix}_{suffix}" in data for _, prefix in MEASURES)
+    ]
+    if not columns:
+        return None
+
+    rows = []
+    for label, prefix in MEASURES:
+        cells = [build_reading(f"{prefix}_{suffix}", data.get(f"{prefix}_{suffix}"))
+                 for _, suffix in columns]
+        if any(cells):
+            rows.append({"label": label, "cells": cells})
+    if not rows:
+        return None
+
+    # 部屋ごとの更新時刻は各センサーでほぼ同じなので、列に 1 つだけ出す
+    ages = []
+    for _, suffix in columns:
+        stamps = [data[key]["updated_at"]
+                  for key in (f"{prefix}_{suffix}" for _, prefix in MEASURES)
+                  if isinstance(data.get(key), dict) and data[key].get("updated_at")]
+        ages.append(max(stamps) if stamps else None)
+
+    return {"columns": [name for name, _ in columns], "rows": rows, "ages": ages}
+
+
+def build_view(data):
+    """Redis のデータ全体からダッシュボードの表示モデルを組み立てる。"""
+    return {
+        "hero": build_hero(data.get("POWER")),
+        "plugs": [r for r in (build_reading(k, data.get(k)) for k in PLUG_KEYS) if r],
+        "matrix": build_matrix(data),
+    }
+
+
 def ip_based_authentication(f):
+    @wraps(f)
     def decorated_function(*args, **kwargs):
         client_ip = request.remote_addr
         app.logger.info(f"Request IP: {client_ip}")
@@ -75,536 +260,19 @@ def ip_based_authentication(f):
 @ip_based_authentication
 def get_data():
     try:
-        client_ip = request.remote_addr
         data = get_redis_data()
         if data is None:
             return "No data found", 404
 
-        # 表示順序とグループ
-        groups = {
-            "Power and Plugs": ["POWER", "KEN_PLUG", "YACHI_PLUG"],
-            "Bedroom": ["TEMPERATURE_BEDROOM", "HUMIDITY_BEDROOM", "CO2_BEDROOM", "LIGHT_LEVEL_BEDROOM"],
-            "Living Room": ["TEMPERATURE_LIVING", "HUMIDITY_LIVING", "CO2_LIVING", "LIGHT_LEVEL_LIVING"],
-            "Study Room": ["TEMPERATURE_STUDY", "HUMIDITY_STUDY", "CO2_STUDY", "LIGHT_LEVEL_STUDY"],
-            "1F": ["TEMPERATURE_1F", "HUMIDITY_1F", "CO2_1F", "LIGHT_LEVEL_1F"]
-        }
-
-        def _sensor_range(key):
-            if "CO2" in key:         return (400, 2000)
-            if "TEMPERATURE" in key: return (10, 40)
-            if "HUMIDITY" in key:    return (0, 100)
-            if "LIGHT_LEVEL" in key: return (0, 20)
-            if key == "POWER":       return (0, 6000)
-            if "PLUG" in key:        return (0, 1500)
-            return None
-
-        def _sensor_unit(key):
-            if "CO2" in key:         return "ppm"
-            if "TEMPERATURE" in key: return "°C"
-            if "HUMIDITY" in key:    return "%"
-            if "LIGHT_LEVEL" in key: return ""
-            if key == "POWER":       return "W"
-            if "PLUG" in key:        return "W"
-            return ""
-
-        def _sensor_label(key):
-            if key == "POWER":       return ("⚡", "Instant Power")
-            if key == "KEN_PLUG":    return ("🔌", "Ken's Plug")
-            if key == "YACHI_PLUG":  return ("🔌", "Yachi's Plug")
-            if "TEMPERATURE" in key: return ("🌡️", "Temperature")
-            if "HUMIDITY" in key:    return ("💧", "Humidity")
-            if "CO2" in key:         return ("🫧", "CO₂")
-            if "LIGHT_LEVEL" in key: return ("☀️", "Light Level")
-            return ("", key)
-
-        all_keys = [k for ks in groups.values() for k in ks]
-        ranges = {k: _sensor_range(k) for k in all_keys if _sensor_range(k)}
-        units  = {k: _sensor_unit(k)  for k in all_keys}
-        labels = {k: _sensor_label(k) for k in all_keys}
-
-        # JSONをHTMLテーブルとして表示するテンプレート
-        html_template = """
-        <!DOCTYPE html>
-        <html lang="ja">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Home Dashboard</title>
-            <style>
-                :root {
-                    --bg: #f4f6fb;
-                    --surface: #ffffff;
-                    --surface2: #eef0f6;
-                    --border: #d1d5e8;
-                    --text: #1e2235;
-                    --text-muted: #6470a0;
-                    --accent: #6366f1;
-                    --accent-glow: rgba(99,102,241,0.12);
-                    --green: #16a34a;
-                    --amber: #d97706;
-                    --red: #dc2626;
-                    --red-glow: rgba(220,38,38,0.10);
-                    --heading-gradient: linear-gradient(135deg, #4f46e5, #6366f1);
-                }
-                @media (prefers-color-scheme: dark) {
-                    :root {
-                        --bg: #0f1117;
-                        --surface: #1a1d27;
-                        --surface2: #22263a;
-                        --border: #2e3350;
-                        --text: #e2e8f0;
-                        --text-muted: #8892a4;
-                        --accent: #6366f1;
-                        --accent-glow: rgba(99,102,241,0.15);
-                        --green: #22c55e;
-                        --amber: #f59e0b;
-                        --red: #ef4444;
-                        --red-glow: rgba(239,68,68,0.15);
-                        --heading-gradient: linear-gradient(135deg, #a5b4fc, #818cf8);
-                    }
-                }
-                * { box-sizing: border-box; margin: 0; padding: 0; }
-                body {
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-                    background: var(--bg);
-                    color: var(--text);
-                    min-height: 100vh;
-                    padding: 24px 16px 48px;
-                }
-                header {
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                    flex-wrap: wrap;
-                    gap: 12px;
-                    margin-bottom: 32px;
-                    padding-bottom: 20px;
-                    border-bottom: 1px solid var(--border);
-                }
-                header h1 {
-                    font-size: 1.6rem;
-                    font-weight: 700;
-                    letter-spacing: -0.02em;
-                    background: var(--heading-gradient);
-                    -webkit-background-clip: text;
-                    -webkit-text-fill-color: transparent;
-                    background-clip: text;
-                }
-                .header-meta {
-                    display: flex;
-                    align-items: center;
-                    gap: 16px;
-                    flex-wrap: wrap;
-                }
-                .meta-chip {
-                    font-size: 0.78rem;
-                    color: var(--text-muted);
-                    background: var(--surface2);
-                    border: 1px solid var(--border);
-                    border-radius: 20px;
-                    padding: 4px 12px;
-                    white-space: nowrap;
-                }
-                .meta-chip span { color: var(--text); font-weight: 500; }
-                .countdown-ring {
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                    font-size: 0.78rem;
-                    color: var(--text-muted);
-                    background: var(--surface2);
-                    border: 1px solid var(--border);
-                    border-radius: 20px;
-                    padding: 4px 12px;
-                }
-                .countdown-ring #countdown {
-                    color: var(--accent);
-                    font-weight: 700;
-                    font-variant-numeric: tabular-nums;
-                    min-width: 18px;
-                    text-align: center;
-                }
-                .progress-bar {
-                    width: 100%;
-                    height: 2px;
-                    background: var(--border);
-                    border-radius: 2px;
-                    overflow: hidden;
-                    margin-bottom: 28px;
-                }
-                .progress-fill {
-                    height: 100%;
-                    background: linear-gradient(90deg, var(--accent), #a78bfa);
-                    border-radius: 2px;
-                    transition: width 1s linear;
-                }
-                .section { margin-bottom: 28px; }
-                .section-header {
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                    margin-bottom: 10px;
-                }
-                .section-icon {
-                    width: 8px; height: 8px;
-                    border-radius: 50%;
-                    background: var(--accent);
-                    box-shadow: 0 0 6px var(--accent);
-                    flex-shrink: 0;
-                }
-                .section-title {
-                    font-size: 0.85rem;
-                    font-weight: 600;
-                    text-transform: uppercase;
-                    letter-spacing: 0.08em;
-                    color: var(--text-muted);
-                }
-                .card {
-                    background: var(--surface);
-                    border: 1px solid var(--border);
-                    border-radius: 12px;
-                    overflow: hidden;
-                }
-                table {
-                    width: 100%;
-                    border-collapse: collapse;
-                }
-                thead th {
-                    background: var(--surface2);
-                    color: var(--text-muted);
-                    font-size: 0.72rem;
-                    font-weight: 600;
-                    text-transform: uppercase;
-                    letter-spacing: 0.07em;
-                    padding: 8px 16px;
-                    text-align: left;
-                    border-bottom: 1px solid var(--border);
-                }
-                tbody tr {
-                    border-bottom: 1px solid var(--border);
-                    transition: background 0.15s;
-                }
-                tbody tr:last-child { border-bottom: none; }
-                tbody tr:hover { background: var(--surface2); }
-                tbody td {
-                    padding: 11px 16px;
-                    font-size: 0.88rem;
-                    vertical-align: middle;
-                }
-                td.key-column {
-                    width: 30%;
-                    color: var(--text);
-                    font-size: 0.85rem;
-                    font-weight: 500;
-                    cursor: help;
-                }
-                .sensor-icon { margin-right: 7px; }
-                td.value-column {
-                    width: 40%;
-                    font-weight: 600;
-                    font-size: 0.95rem;
-                    color: var(--text);
-                }
-                td.updated-at-column {
-                    width: 30%;
-                    color: var(--text-muted);
-                    font-size: 0.76rem;
-                    font-variant-numeric: tabular-nums;
-                }
-                td.updated-at-column.stale {
-                    color: var(--amber);
-                    font-weight: 600;
-                }
-                .hero {
-                    display: flex;
-                    align-items: center;
-                    gap: 28px;
-                    flex-wrap: wrap;
-                    padding: 20px 24px;
-                    margin-bottom: 28px;
-                }
-                .hero-label {
-                    font-size: 0.78rem;
-                    font-weight: 600;
-                    text-transform: uppercase;
-                    letter-spacing: 0.08em;
-                    color: var(--text-muted);
-                    margin-bottom: 6px;
-                }
-                .hero-value {
-                    font-size: 2.6rem;
-                    font-weight: 800;
-                    letter-spacing: -0.03em;
-                    line-height: 1;
-                    font-variant-numeric: tabular-nums;
-                }
-                .hero-value.warn { color: var(--amber); }
-                .hero-value.alert { color: var(--red); animation: pulse 1.8s ease-in-out infinite; }
-                .hero-unit {
-                    font-size: 1rem;
-                    font-weight: 500;
-                    color: var(--text-muted);
-                    margin-left: 5px;
-                }
-                .hero-bar-wrap { flex: 1; min-width: 220px; }
-                .hero-bar {
-                    position: relative;
-                    height: 10px;
-                    background: var(--surface2);
-                    border: 1px solid var(--border);
-                    border-radius: 6px;
-                    overflow: hidden;
-                }
-                .hero-bar-fill {
-                    height: 100%;
-                    border-radius: 6px;
-                    background: linear-gradient(90deg, #22c55e, #4ade80);
-                    transition: width 0.6s cubic-bezier(.4,0,.2,1);
-                }
-                .hero-bar-fill.warn { background: linear-gradient(90deg, #22c55e, var(--amber)); }
-                .hero-bar-fill.alert { background: linear-gradient(90deg, var(--amber), var(--red)); }
-                .hero-tick {
-                    position: absolute;
-                    top: 0; bottom: 0;
-                    width: 2px;
-                    background: var(--red);
-                    opacity: 0.7;
-                }
-                .hero-scale {
-                    display: flex;
-                    justify-content: space-between;
-                    font-size: 0.7rem;
-                    color: var(--text-muted);
-                    margin-top: 6px;
-                }
-                .badge {
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 5px;
-                    padding: 3px 10px;
-                    border-radius: 6px;
-                    font-size: 0.88rem;
-                    font-weight: 600;
-                }
-                .badge-normal {
-                    background: rgba(34,197,94,0.12);
-                    color: var(--green);
-                    border: 1px solid rgba(34,197,94,0.25);
-                }
-                .badge-warn {
-                    background: rgba(217,119,6,0.12);
-                    color: var(--amber);
-                    border: 1px solid rgba(217,119,6,0.3);
-                }
-                .badge-alert {
-                    background: var(--red-glow);
-                    color: var(--red);
-                    border: 1px solid rgba(239,68,68,0.3);
-                    animation: pulse 1.8s ease-in-out infinite;
-                }
-                @keyframes pulse {
-                    0%, 100% { opacity: 1; }
-                    50% { opacity: 0.6; }
-                }
-                .value-wrap { display: flex; flex-direction: column; gap: 6px; }
-                .mini-bar {
-                    height: 4px;
-                    background: var(--border);
-                    border-radius: 2px;
-                    overflow: hidden;
-                    width: 100%;
-                    max-width: 240px;
-                }
-                .mini-bar-fill {
-                    height: 100%;
-                    border-radius: 2px;
-                    background: linear-gradient(90deg, #22c55e, #4ade80);
-                    transition: width 0.6s cubic-bezier(.4,0,.2,1);
-                }
-                .mini-bar-fill.bar-alert {
-                    background: linear-gradient(90deg, var(--amber), var(--red));
-                }
-                .unit {
-                    font-size: 0.72rem;
-                    color: var(--text-muted);
-                    font-weight: 400;
-                    margin-left: 2px;
-                }
-                @media (max-width: 600px) {
-                    td.updated-at-column { display: none; }
-                    thead th:last-child { display: none; }
-                    td.key-column { width: 45%; }
-                    td.value-column { width: 55%; }
-                }
-            </style>
-        </head>
-        <body>
-            <header>
-                <h1>&#127968; Home Dashboard</h1>
-                <div class="header-meta">
-                    <div class="meta-chip">IP: <span>{{ client_ip }}</span></div>
-                    <div class="meta-chip">Updated: <span id="lastReload">—</span></div>
-                    <div class="countdown-ring">Reload in <span id="countdown">30</span>s</div>
-                </div>
-            </header>
-            <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:100%"></div></div>
-
-            <main id="content">
-            {% if data.get('POWER') is mapping and 'value' in data['POWER'] %}
-            {% set pv = data['POWER']['value']|float %}
-            {% set ppct = [[(pv / 6000 * 100)|int, 0]|max, 100]|min %}
-            {% set tickpct = (power_alert_threshold / 6000 * 100)|int %}
-            {% set pstate = 'alert' if pv > power_alert_threshold else ('warn' if pv >= power_alert_threshold * 0.8 else '') %}
-            <div class="card hero">
-                <div>
-                    <div class="hero-label">&#9889; Instant Power</div>
-                    <div class="hero-value {{ pstate }}">{{ data['POWER']['value'] }}<span class="hero-unit">W</span></div>
-                </div>
-                <div class="hero-bar-wrap">
-                    <div class="hero-bar">
-                        <div class="hero-bar-fill {{ pstate }}" style="width:{{ ppct }}%"></div>
-                        <div class="hero-tick" style="left:{{ tickpct }}%"></div>
-                    </div>
-                    <div class="hero-scale">
-                        <span>0 W</span>
-                        <span>alert {{ power_alert_threshold }} W</span>
-                        <span>6000 W</span>
-                    </div>
-                </div>
-            </div>
-            {% endif %}
-
-            {% for group_name, keys in groups.items() %}
-            <div class="section">
-                <div class="section-header">
-                    <div class="section-icon"></div>
-                    <div class="section-title">{{ group_name }}</div>
-                </div>
-                <div class="card">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th class="key-column">Sensor</th>
-                                <th class="value-column">Value</th>
-                                <th class="updated-at-column">Updated At</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for key in keys %}
-                            {% if key in data %}
-                            <tr>
-                                <td class="key-column" title="{{ key }}"><span class="sensor-icon">{{ labels[key][0] }}</span>{{ labels[key][1] }}</td>
-                                <td class="value-column">
-                                    {% if data[key] is mapping and 'value' in data[key] %}
-                                        {% set raw = data[key]['value'] %}
-                                        {% set is_alert = (key == "POWER" and raw|float > power_alert_threshold) or ("CO2" in key and raw|float > co2_alert_threshold) %}
-                                        {% set is_warn = not is_alert and ((key == "POWER" and raw|float >= power_alert_threshold * 0.8) or ("CO2" in key and raw|float >= co2_alert_threshold * 0.8)) %}
-                                        <div class="value-wrap">
-                                            {% if is_alert %}
-                                                <span class="badge badge-alert">
-                                                    {% if key == "POWER" %}&#9889;{% else %}&#9888;{% endif %}
-                                                    {{ raw }}<span class="unit">{{ units.get(key, '') }}</span>
-                                                </span>
-                                            {% elif is_warn %}
-                                                <span class="badge badge-warn">
-                                                    {{ raw }}<span class="unit">{{ units.get(key, '') }}</span>
-                                                </span>
-                                            {% else %}
-                                                <span class="badge badge-normal">
-                                                    {{ raw }}<span class="unit">{{ units.get(key, '') }}</span>
-                                                </span>
-                                            {% endif %}
-                                            {% if key in ranges %}
-                                                {% set rmin = ranges[key][0] %}
-                                                {% set rmax = ranges[key][1] %}
-                                                {% set pct = [[(( raw|float - rmin ) / ( rmax - rmin ) * 100)|int, 0]|max, 100]|min %}
-                                                <div class="mini-bar">
-                                                    <div class="mini-bar-fill{% if is_alert %} bar-alert{% endif %}" style="width:{{ pct }}%"></div>
-                                                </div>
-                                            {% endif %}
-                                        </div>
-                                    {% else %}
-                                        <span class="badge badge-normal">{{ data[key] }}</span>
-                                    {% endif %}
-                                </td>
-                                {% if data[key] is mapping and 'updated_at' in data[key] %}
-                                <td class="updated-at-column" data-updated="{{ data[key]['updated_at'] }}" title="{{ data[key]['updated_at'] }}">{{ data[key]['updated_at'] }}</td>
-                                {% else %}
-                                <td class="updated-at-column">—</td>
-                                {% endif %}
-                            </tr>
-                            {% endif %}
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            {% endfor %}
-            </main>
-
-            <script>
-                const REFRESH_SEC = 30;
-                let countdown = REFRESH_SEC;
-                const countdownEl = document.getElementById('countdown');
-                const lastReloadEl = document.getElementById('lastReload');
-                const progressFill = document.getElementById('progressFill');
-
-                function fmtRel(s) {
-                    if (s < 60) return s + 's ago';
-                    if (s < 3600) return Math.floor(s / 60) + 'm ago';
-                    if (s < 86400) return Math.floor(s / 3600) + 'h ago';
-                    return Math.floor(s / 86400) + 'd ago';
-                }
-
-                function applyRelativeTimes() {
-                    document.querySelectorAll('[data-updated]').forEach(el => {
-                        const t = Date.parse(el.dataset.updated.replace(' ', 'T'));
-                        if (isNaN(t)) { el.textContent = el.dataset.updated; return; }
-                        const s = Math.max(0, Math.floor((Date.now() - t) / 1000));
-                        el.textContent = fmtRel(s);
-                        el.classList.toggle('stale', s > 300);
-                    });
-                }
-
-                async function refresh() {
-                    try {
-                        const res = await fetch(location.href, { cache: 'no-store' });
-                        if (!res.ok) throw new Error('HTTP ' + res.status);
-                        const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
-                        const fresh = doc.getElementById('content');
-                        if (!fresh) throw new Error('unexpected response');
-                        document.getElementById('content').innerHTML = fresh.innerHTML;
-                        lastReloadEl.textContent = new Date().toLocaleTimeString('ja-JP');
-                        applyRelativeTimes();
-                    } catch (e) {
-                        location.reload();
-                    }
-                }
-
-                lastReloadEl.textContent = new Date().toLocaleTimeString('ja-JP');
-                applyRelativeTimes();
-
-                setInterval(() => {
-                    if (document.hidden) return;
-                    countdown--;
-                    if (countdown <= 0) { countdown = REFRESH_SEC; refresh(); }
-                    countdownEl.textContent = countdown;
-                    progressFill.style.width = (countdown / REFRESH_SEC * 100) + '%';
-                    applyRelativeTimes();
-                }, 1000);
-
-                document.addEventListener('visibilitychange', () => {
-                    if (!document.hidden) { countdown = REFRESH_SEC; refresh(); }
-                });
-            </script>
-        </body>
-        </html>
-        """
-        return render_template_string(
-            html_template, data=data, groups=groups, client_ip=client_ip, ranges=ranges, units=units,
-            labels=labels,
-            power_alert_threshold=POWER_ALERT_THRESHOLD_W, co2_alert_threshold=CO2_ALERT_THRESHOLD_PPM)
+        return render_template(
+            'dashboard.html',
+            client_ip=request.remote_addr,
+            refresh_seconds=REFRESH_SECONDS,
+            power_threshold=POWER_ALERT_THRESHOLD_W,
+            **build_view(data),
+        )
     except Exception as e:
+        app.logger.exception("Failed to render dashboard")
         return f"Error: {str(e)}", 500
 
 @app.route('/health', methods=['GET'])

@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- ブラウザ既定 UI（スクロールバー・キャンバス背景）を配色に追随させ、初期描画の白フラッシュを抑える -->
+<meta name="color-scheme" content="light dark">
+<title>House meter</title>
+<style>
+/* ------------------------------------------------------------------
+   配色トークン
+   計器盤のメタファー。既定は無彩色で、色は状態（警告・警報）だけに使う。
+   light-dark() 非対応ブラウザ向けに prefers-color-scheme のフォールバックを持つ。
+   ------------------------------------------------------------------ */
+:root {
+  --paper-l:   #eceeea;  --paper-d:   #141815;
+  --panel-l:   #ffffff;  --panel-d:   #1c211d;
+  --panel2-l:  #f5f7f4;  --panel2-d:  #232823;
+  --rule-l:    #d5dad4;  --rule-d:    #333a34;
+  --ink-l:     #191f1b;  --ink-d:     #e4e8e2;
+  --muted-l:   #5b6660;  --muted-d:   #93a096;
+  --lcd-l:     #c9d2c4;  --lcd-d:     #1f2620;
+  --lcdink-l:  #141a15;  --lcdink-d:  #cfe0cb;
+  --lcdrule-l: #a9b4a4;  --lcdrule-d: #3a453b;
+  --warn-l:    #8f5b00;  --warn-d:    #e0a33c;
+  --alarm-l:   #b3261e;  --alarm-d:   #ff6b5e;
+
+  --paper: var(--paper-l);   --panel: var(--panel-l);
+  --panel2: var(--panel2-l); --rule: var(--rule-l);
+  --ink: var(--ink-l);       --muted: var(--muted-l);
+  --lcd: var(--lcd-l);       --lcdink: var(--lcdink-l);
+  --lcdrule: var(--lcdrule-l);
+  --warn: var(--warn-l);     --alarm: var(--alarm-l);
+
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: var(--paper-d);   --panel: var(--panel-d);
+    --panel2: var(--panel2-d); --rule: var(--rule-d);
+    --ink: var(--ink-d);       --muted: var(--muted-d);
+    --lcd: var(--lcd-d);       --lcdink: var(--lcdink-d);
+    --lcdrule: var(--lcdrule-d);
+    --warn: var(--warn-d);     --alarm: var(--alarm-d);
+  }
+}
+@supports (color: light-dark(white, black)) {
+  :root {
+    --paper: light-dark(var(--paper-l), var(--paper-d));
+    --panel: light-dark(var(--panel-l), var(--panel-d));
+    --panel2: light-dark(var(--panel2-l), var(--panel2-d));
+    --rule: light-dark(var(--rule-l), var(--rule-d));
+    --ink: light-dark(var(--ink-l), var(--ink-d));
+    --muted: light-dark(var(--muted-l), var(--muted-d));
+    --lcd: light-dark(var(--lcd-l), var(--lcd-d));
+    --lcdink: light-dark(var(--lcdink-l), var(--lcdink-d));
+    --lcdrule: light-dark(var(--lcdrule-l), var(--lcdrule-d));
+    --warn: light-dark(var(--warn-l), var(--warn-d));
+    --alarm: light-dark(var(--alarm-l), var(--alarm-d));
+  }
+}
+
+/* ------------------------------------------------------------------ 土台 */
+*, *::before, *::after { box-sizing: border-box; }
+body, h1, h2, h3, p, dl, dd, figure, table { margin: 0; padding: 0; }
+
+body {
+  font-family: "Segoe UI Variable Text", "Segoe UI", system-ui,
+               "Hiragino Sans", "Noto Sans JP", sans-serif;
+  font-variant-numeric: tabular-nums slashed-zero;
+  background: var(--paper);
+  color: var(--ink);
+  min-block-size: 100dvb;
+  padding-block: clamp(1rem, 3vb, 2rem) 3rem;
+  padding-inline: clamp(0.75rem, 3vi, 2rem);
+  line-height: 1.45;
+}
+
+main {
+  max-inline-size: 64rem;
+  margin-inline: auto;
+  container: page / inline-size;  /* 名前 / 型 の順。中身は main 自身の幅で切り替える */
+}
+
+.visually-hidden:where(:not(:focus-within, :active)) {
+  clip-path: inset(50%);
+  block-size: 1px; inline-size: 1px;
+  overflow: hidden; position: absolute; white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ ヘッダ */
+.masthead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1.5rem;
+  padding-block-end: 0.75rem;
+  border-block-end: 1px solid var(--rule);
+  margin-block-end: clamp(1rem, 3vb, 1.75rem);
+}
+.masthead h1 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.link-state {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.link-dot {
+  inline-size: 7px; block-size: 7px;
+  border-radius: 50%;
+  background: var(--ink);
+  flex-shrink: 0;
+}
+body[data-link="down"] .link-dot { background: none; box-shadow: inset 0 0 0 1.5px var(--warn); }
+body[data-link="down"] .link-state { color: var(--warn); }
+
+/* ------------------------------------------------------------------ 計器（瞬時電力）
+   ページで唯一の大きな要素。液晶パネルを模した面に数値を右揃えで置く。 */
+.meter {
+  background: var(--lcd);
+  color: var(--lcdink);
+  border: 1px solid var(--lcdrule);
+  border-radius: 3px;
+  padding: clamp(0.9rem, 3cqi, 1.6rem);
+  margin-block-end: clamp(1.5rem, 4vb, 2.5rem);
+}
+.meter-caption {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  opacity: 0.75;
+}
+.meter-caption .age { color: inherit; font-weight: 400; }
+.meter-readout {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 0.15em;
+  font-size: clamp(3rem, 13cqi, 5.75rem);
+  font-weight: 650;
+  letter-spacing: -0.045em;
+  line-height: 0.95;
+  margin-block: 0.1em 0.25em;
+}
+.meter-readout .u {
+  font-size: 0.22em;
+  font-weight: 500;
+  letter-spacing: 0;
+  opacity: 0.7;
+}
+.meter[data-power-state="warn"] .meter-readout { color: var(--warn); }
+.meter[data-power-state="alert"] .meter-readout { color: var(--alarm); }
+
+/* 目盛り: 1000 W ごとの刻みと、警報点の赤い基線 */
+.scale {
+  position: relative;
+  block-size: 0.9rem;
+  border-block-end: 1px solid currentColor;
+  background:
+    repeating-linear-gradient(90deg,
+      color-mix(in srgb, currentColor 40%, transparent) 0 1px,
+      transparent 1px var(--scale-step, 16.667%));
+  opacity: 0.85;
+}
+.scale-fill {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  background: currentColor;
+  opacity: 0.55;
+  transition: inline-size 600ms cubic-bezier(.4, 0, .2, 1);
+}
+.meter[data-power-state="warn"] .scale-fill { background: var(--warn); opacity: 1; }
+.meter[data-power-state="alert"] .scale-fill { background: var(--alarm); opacity: 1; }
+/* 警報点の基線。バーが警報点を越えると同系色で塗り潰されてしまうため、
+   トラックの上に突き出させて常に見えるようにする。 */
+.scale-alarm {
+  position: absolute;
+  inset-block: -0.45rem 0;
+  inline-size: 2px;
+  background: var(--alarm);
+  transform: translateX(-1px);
+}
+.scale-legend {
+  position: relative;
+  block-size: 1.2em;
+  font-size: 0.7rem;
+  opacity: 0.75;
+  margin-block-start: 0.25rem;
+}
+.scale-legend span { position: absolute; inset-block-start: 0; white-space: nowrap; }
+.scale-legend .at-start { inset-inline-start: 0; }
+.scale-legend .at-end { inset-inline-end: 0; }
+.scale-legend .at-alarm { transform: translateX(-50%); color: var(--alarm); opacity: 1; }
+
+.meter-note {
+  font-size: 0.8rem;
+  margin-block-start: 0.9rem;
+  opacity: 0.75;
+}
+.meter-note.lead { font-size: 1.05rem; margin-block: 2rem 0.5rem; }
+
+/* 狭い幅では警報点と上限のラベルが重なるので、上限を落として警報点を残す */
+@container page (max-width: 26rem) {
+  .scale-legend .at-end { display: none; }
+}
+.meter[data-power-state="alert"] .meter-note,
+.meter[data-power-state="warn"] .meter-note { opacity: 1; font-weight: 500; }
+.meter[data-power-state="alert"] .meter-note { color: var(--alarm); }
+.meter[data-power-state="warn"] .meter-note { color: var(--warn); }
+
+/* 家全体の消費のうち把握できている内訳。計器と同じ面に置いて関係を示す。 */
+.meter-plugs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 2.5rem;
+  margin-block-start: 0.9rem;
+  padding-block-start: 0.75rem;
+  border-block-start: 1px solid var(--lcdrule);
+  font-size: 0.82rem;
+}
+.meter-plugs > div { flex: 0 1 13rem; display: flex; align-items: baseline; gap: 0.5rem; }
+.meter-plugs .age { color: inherit; opacity: 0.6; }
+.meter-plugs .n { margin-inline-start: auto; font-weight: 600; }
+.meter-plugs .u { font-size: 0.85em; font-weight: 400; opacity: 0.7; margin-inline-start: 0.15em; }
+
+/* ------------------------------------------------------------------ 見出し */
+h2 {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+  padding-block-end: 0.35rem;
+  border-block-end: 1px solid var(--rule);
+  margin-block-end: 0.6rem;
+}
+section + section { margin-block-start: clamp(1.25rem, 3vb, 2rem); }
+
+/* ------------------------------------------------------------------ 部屋 × 測定項目の表
+   同じ測定項目が横一列に並ぶので、部屋どうしの比較が目だけでできる。 */
+.matrix {
+  inline-size: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.matrix th, .matrix td {
+  text-align: start;
+  padding: 0.5rem 0.5rem 0.5rem 0;
+  vertical-align: baseline;
+}
+.matrix thead th {
+  font-size: 0.8rem;
+  font-weight: 600;
+  vertical-align: bottom;
+  padding-block-end: 0.35rem;
+}
+/* table-layout: fixed は最初の行で列幅が決まるため、見出し行の角セルに指定する */
+.matrix thead td:first-child { inline-size: 5.5rem; }
+.matrix thead tr > * { border-block-end: 1px solid var(--rule); }
+.matrix tbody th {
+  inline-size: 5.5rem;
+  font-size: 0.74rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+.matrix tbody tr + tr > * { border-block-start: 1px solid var(--rule); }
+.matrix td { font-size: 1.05rem; font-weight: 600; }
+.matrix .u { font-size: 0.66em; font-weight: 500; color: var(--muted); margin-inline-start: 0.12em; }
+.matrix .missing { color: var(--muted); font-weight: 400; }
+.matrix td[data-state="warn"] .n { color: var(--warn); }
+.matrix td[data-state="alert"] .n { color: var(--alarm); }
+.matrix .ages td { font-size: inherit; font-weight: 400; }
+
+@container page (max-width: 34rem) {
+  .matrix thead td:first-child { inline-size: 4.25rem; }
+  .matrix tbody th { inline-size: 4.25rem; font-size: 0.7rem; }
+  .matrix thead th { font-size: 0.72rem; }
+  .matrix td { font-size: 0.9rem; }
+  .matrix th, .matrix td { padding-inline-end: 0.35rem; }
+}
+
+/* 警報点までの余裕を示すトラック。閾値を持つ測定項目（CO2）にだけ付く。 */
+.track { block-size: 3px; max-inline-size: 4.5rem; margin-block-start: 0.3rem; background: var(--rule); }
+.track > i { display: block; block-size: 100%; background: var(--muted); transition: inline-size 600ms cubic-bezier(.4, 0, .2, 1); }
+[data-state="warn"] .track > i { background: var(--warn); }
+[data-state="alert"] .track > i { background: var(--alarm); }
+
+.age { font-size: 0.72rem; color: var(--muted); white-space: nowrap; }
+.age.stale { color: var(--warn); }
+
+.empty { font-size: 0.82rem; color: var(--muted); padding-block: 0.5rem; }
+
+footer {
+  margin-block-start: 2.5rem;
+  padding-block-start: 0.75rem;
+  border-block-start: 1px solid var(--rule);
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+/* ------------------------------------------------------------------ 動き
+   動きは「変化したこと」を示すときだけ。既定では何も動かない。 */
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 160ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) { animation: none !important; }
+  .scale-fill, .track > i { transition: none; }
+}
+</style>
+</head>
+<body data-link="up">
+
+<main>
+  <div class="masthead">
+    <h1>House meter</h1>
+    <p class="link-state"><span class="link-dot" aria-hidden="true"></span><span id="link-text">Updated just now</span></p>
+  </div>
+
+  <p id="announce" role="status" class="visually-hidden"></p>
+
+  <div id="content">
+    <figure class="meter"{% if hero %} data-power-state="{{ hero.state }}" data-power-value="{{ hero.text }}" data-power-threshold="{{ power_threshold }}"{% else %} data-power-state=""{% endif %}>
+      <figcaption class="meter-caption">
+        <span>Power drawn now</span>
+        {% if hero and hero.updated_at %}<span class="age" data-updated="{{ hero.updated_at }}" title="{{ hero.updated_at }}">{{ hero.updated_at }}</span>{% endif %}
+      </figcaption>
+      {% if hero %}
+      <p class="meter-readout">{{ hero.text }}<span class="u">W</span></p>
+      {% if hero.pct is not none %}
+      <div class="scale" style="--scale-step: {{ hero.step_pct }}%" aria-hidden="true">
+        <div class="scale-fill" style="inline-size: {{ hero.pct }}%"></div>
+        <div class="scale-alarm" style="inset-inline-start: {{ hero.alarm_pct }}%"></div>
+      </div>
+      <p class="scale-legend" aria-hidden="true">
+        <span class="at-start">0</span>
+        <span class="at-alarm" style="inset-inline-start: {{ hero.alarm_pct }}%">{{ hero.alarm_text }}</span>
+        <span class="at-end">{{ hero.max }} W</span>
+      </p>
+      {% endif %}
+      <p class="meter-note">{{ hero.note }}</p>
+      {% else %}
+      <p class="meter-note lead">Waiting for the first reading from the smart meter.</p>
+      {% endif %}
+      {% if plugs %}
+      <div class="meter-plugs">
+        {% for r in plugs %}
+        <div>
+          <span title="{{ r.key }}">{{ r.label }}</span>
+          {% if r.updated_at %}<span class="age" data-updated="{{ r.updated_at }}" title="{{ r.updated_at }}">{{ r.updated_at }}</span>{% endif %}
+          <span class="n">{{ r.text }}<span class="u">{{ r.unit }}</span></span>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </figure>
+
+    <section>
+      <h2>Air by room</h2>
+      {% if matrix %}
+      <table class="matrix">
+        <caption class="visually-hidden">Temperature, humidity, carbon dioxide and light level in each room</caption>
+        <thead>
+          <tr>
+            <td></td>
+            {% for name in matrix.columns %}<th scope="col">{{ name }}</th>{% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in matrix.rows %}
+          <tr>
+            <th scope="row">{{ row.label }}</th>
+            {% for cell in row.cells %}
+            {% if cell %}
+            <td data-state="{{ cell.state }}" title="{{ cell.key }}">
+              <span class="n">{{ cell.text }}</span><span class="u">{{ cell.unit }}</span>
+              {% if cell.pct is not none %}<div class="track" aria-hidden="true"><i style="inline-size: {{ cell.pct }}%"></i></div>{% endif %}
+            </td>
+            {% else %}
+            <td class="missing">&mdash;</td>
+            {% endif %}
+            {% endfor %}
+          </tr>
+          {% endfor %}
+          <tr class="ages">
+            <th scope="row">Last seen</th>
+            {% for stamp in matrix.ages %}
+            <td>{% if stamp %}<span class="age" data-updated="{{ stamp }}" title="{{ stamp }}">{{ stamp }}</span>{% else %}&mdash;{% endif %}</td>
+            {% endfor %}
+          </tr>
+        </tbody>
+      </table>
+      {% else %}
+      <p class="empty">No room readings yet.</p>
+      {% endif %}
+    </section>
+  </div>
+
+  <footer>Served to {{ client_ip }}. Readings refresh every {{ refresh_seconds }} seconds.</footer>
+</main>
+
+<script>
+const REFRESH_MS = {{ refresh_seconds }} * 1000;
+const content = document.getElementById('content');
+const linkText = document.getElementById('link-text');
+const announce = document.getElementById('announce');
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+
+let lastPowerState = powerState();
+let failures = 0;
+let refreshing = false;
+
+function powerState() {
+  const meter = content.querySelector('[data-power-state]');
+  return meter ? meter.dataset.powerState : null;
+}
+
+function relative(seconds) {
+  if (seconds < 60) return seconds + 's ago';
+  if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
+  if (seconds < 86400) return Math.floor(seconds / 3600) + 'h ago';
+  return Math.floor(seconds / 86400) + 'd ago';
+}
+
+function stampRelativeTimes() {
+  for (const el of content.querySelectorAll('[data-updated]')) {
+    const parsed = Date.parse(el.dataset.updated.replace(' ', 'T'));
+    if (Number.isNaN(parsed)) continue;
+    const seconds = Math.max(0, Math.round((Date.now() - parsed) / 1000));
+    el.textContent = relative(seconds);
+    el.classList.toggle('stale', seconds > 300);
+  }
+}
+
+// 警報状態が変わったときだけ読み上げる。毎回の更新は通知しない（読み上げの騒音になるため）。
+function announceStateChange() {
+  const meter = content.querySelector('[data-power-state]');
+  if (!meter) return;
+  const state = meter.dataset.powerState;
+  if (state === lastPowerState) return;
+  lastPowerState = state;
+  const watts = meter.dataset.powerValue;
+  const limit = meter.dataset.powerThreshold;
+  if (state === 'alert') announce.textContent = watts + ' watts. Over the ' + limit + ' watt alarm point.';
+  else if (state === 'warn') announce.textContent = watts + ' watts. Nearing the ' + limit + ' watt alarm point.';
+  else announce.textContent = 'Power is back under the alarm point at ' + watts + ' watts.';
+}
+
+function setLink(up, message) {
+  document.body.dataset.link = up ? 'up' : 'down';
+  linkText.textContent = message;
+}
+
+function swap(html) {
+  const apply = () => { content.innerHTML = html; };
+  if (reduceMotion.matches || !document.startViewTransition) { apply(); return; }
+  const transition = document.startViewTransition(apply);
+  // 遷移が中断されても DOM は更新済み。未処理の promise 拒否を出さないよう握りつぶす。
+  transition.ready.catch(() => {});
+  transition.finished.catch(() => {});
+}
+
+async function refresh() {
+  // 定期更新とタブ復帰が重なると View Transition どうしが潰し合うので、多重実行を防ぐ
+  if (refreshing) return;
+  refreshing = true;
+  try {
+    const res = await fetch(location.href, { cache: 'no-store', signal: AbortSignal.timeout(10000) });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const fresh = new DOMParser()
+      .parseFromString(await res.text(), 'text/html')
+      .getElementById('content');
+    if (!fresh) throw new Error('unexpected response');
+    swap(fresh.innerHTML);
+    failures = 0;
+    setLink(true, 'Updated ' + new Date().toLocaleTimeString('ja-JP'));
+    stampRelativeTimes();
+    announceStateChange();
+  } catch {
+    failures += 1;
+    setLink(false, "Can't reach the meter — retrying (" + failures + ')');
+  } finally {
+    refreshing = false;
+  }
+}
+
+setLink(true, 'Updated ' + new Date().toLocaleTimeString('ja-JP'));
+stampRelativeTimes();
+
+setInterval(stampRelativeTimes, 10000);
+setInterval(() => { if (!document.hidden) refresh(); }, REFRESH_MS);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+</script>
+</body>
+</html>
