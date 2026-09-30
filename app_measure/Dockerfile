@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1.27
 # python:3.14.7-slim (Debian ベース、arm64 対応) を使用。
 # 以前は debian:trixie 上で Python をソースビルドしていたが、
 # 公式 slim イメージで同一バージョンが提供されているため移行した（ビルド時間 30〜60 分 → 数分）。

@@ -167,7 +167,7 @@ PyPI ミラー（`pypi.flatt.tech`）経由で取得し、悪性パッケージ�
   トークン未設定／空の場合は匿名モード（`https://pypi.flatt.tech/simple/`）にフォールバックする。
 - `build-and-push.bat` は両ビルドに `--secret id=takumi_guard_token,src=takumi_guard_token` を渡す。
   個別ビルド時も同じ `--secret` フラグを付けること。
-- Dockerfile 冒頭の `# syntax=docker/dockerfile:1.7` は secret マウントに必要なため削除しない。
+- Dockerfile 冒頭の `# syntax=docker/dockerfile:1.27` は secret マウントに必要なため削除しない（バージョンは更新してよい）。
 
 #### cloudfunctions（npm / GCP Cloud Functions）
 
