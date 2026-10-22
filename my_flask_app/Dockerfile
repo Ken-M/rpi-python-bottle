@@ -1,5 +1,5 @@
-# syntax=docker/dockerfile:1.27
-FROM python:3.14.7-slim
+# syntax=docker/dockerfile:1.28
+FROM python:3.15.1-slim
 
 USER root
 RUN apt-get update && \
