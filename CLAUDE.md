@@ -193,10 +193,19 @@ PyPI ミラー（`pypi.flatt.tech`）経由で取得し、悪性パッケージ�
     Select-Object -First 1
 
   gcloud functions deploy my-api-to-bq `
+    --gen2 --region=us-central1 --entry-point=regdata `
     --source=. --runtime=nodejs24 --trigger-http `
+    --runtime-update-policy=automatic `
     --set-build-env-vars "TAKUMI_GUARD_TOKEN=$TOKEN"
   ```
   事前に `gcloud auth login` / `gcloud config set project <プロジェクト ID>` を済ませておくこと。
+- **ランタイムの自動更新**: `--runtime-update-policy=automatic` を必ず付ける。無効のままだと
+  ベースイメージ（Node.js 本体）はデプロイ時点で固定され、Node.js のセキュリティリリースが出ても
+  再デプロイするまで反映されない（2026-10 に自動更新が無効だったことが判明し、有効化済み）。
+  反映状況は `gcloud functions describe my-api-to-bq --region=us-central1 --format="yaml(buildConfig.automaticUpdatePolicy)"`
+  で確認できる（`automaticUpdatePolicy: {}` なら有効）。
+- 関数は**認証必須**（`roles/run.invoker` は送信用サービスアカウントのみ。`allUsers` を付けないこと）。
+  未認証リクエストは 403 になる。
 - `package-lock.json` 再生成時も Guard 経由で。加えて**公開後 7 日以上経過したバージョンのみ**を
   採用する（公開直後の悪性バージョン混入対策）ため `--before=<7日前の日付>` を付ける:
   `npm install --package-lock-only --registry=https://npm.flatt.tech/ --before=<YYYY-MM-DD>`
