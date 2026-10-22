@@ -23,13 +23,13 @@ Raspberry Pi 5 上で稼働する**電力計測・スマートホーム連携サ
 ├── README.md                   # 旧メモ（Python 3.5 時代。現在は本ファイルを参照）
 ├── .gitignore
 ├── app_measure/                # 電力計測・GCP 送信サービス
-│   ├── Dockerfile              # python:3.14.7-slim ベース
+│   ├── Dockerfile              # python:3.15.1-slim ベース
 │   ├── get-power.py            # メインループ（スマートメーター通信・Redis 書き込み）
 │   ├── echonet.py              # ECHONET Lite コマンド定数（GET_NOW_POWER, GET_LATEST30）
 │   ├── gcp_environment_tmpl.py # GCP 設定テンプレート → gcp_environment.py を Pi 上に配置
 │   └── secret_tmpl.py          # 認証情報テンプレート → secret.py を Pi 上に配置
 ├── my_flask_app/               # ホームダッシュボード Flask アプリ
-│   ├── Dockerfile              # python:3.14.7-slim ベース
+│   ├── Dockerfile              # python:3.15.1-slim ベース
 │   ├── my_flask_app.py         # Flask 本体（Redis 読み取り・表示モデル組み立て）
 │   ├── templates/
 │   │   └── dashboard.html      # ダッシュボードの HTML / CSS / JS（Jinja2 テンプレート）
@@ -120,9 +120,9 @@ docker compose up -d
 
 ## 開発上の注意点
 
-### app_measure: ベースイメージ（python:3.14.7-slim）
+### app_measure: ベースイメージ（python:3.15.1-slim）
 
-- ベースイメージは `python:3.14.7-slim`（my_flask_app と共通）
+- ベースイメージは `python:3.15.1-slim`（my_flask_app と共通）
 - 以前は `debian:trixie` 上で Python をソースコンパイルしていた（30〜60 分）が、
   公式 slim イメージへ移行済み。ソースビルドに戻さないこと
 - ビルドは毎回クリーンビルド（`--no-cache`、意図的）。数分で完了する
@@ -167,7 +167,7 @@ PyPI ミラー（`pypi.flatt.tech`）経由で取得し、悪性パッケージ�
   トークン未設定／空の場合は匿名モード（`https://pypi.flatt.tech/simple/`）にフォールバックする。
 - `build-and-push.bat` は両ビルドに `--secret id=takumi_guard_token,src=takumi_guard_token` を渡す。
   個別ビルド時も同じ `--secret` フラグを付けること。
-- Dockerfile 冒頭の `# syntax=docker/dockerfile:1.27` は secret マウントに必要なため削除しない（バージョンは更新してよい）。
+- Dockerfile 冒頭の `# syntax=docker/dockerfile:1.28` は secret マウントに必要なため削除しない（バージョンは更新してよい）。
 
 #### cloudfunctions（npm / GCP Cloud Functions）
 
