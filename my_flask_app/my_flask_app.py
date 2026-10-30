@@ -100,6 +100,9 @@ def _make_dummy_hashes():
         try:
             dummies[method] = generate_password_hash(secrets.token_urlsafe(32), method=method)
         except Exception:
+            # 黙って飛ばすと、この方式のユーザーだけ応答時間で存在が分かる状態に戻るので記録しておく
+            app.logger.warning(f"Could not build a dummy hash for method {method!r}; "
+                               "username timing protection is off for users of this method")
             continue
     return dummies
 
@@ -133,13 +136,33 @@ def get_tunnel_client_ip():
     forwarded = request.headers.get("X-Forwarded-For", "")
     candidate = forwarded.split(",")[-1].strip()
     try:
-        return str(ipaddress.ip_address(candidate))
+        address = ipaddress.ip_address(candidate)
     except ValueError:
         return request.remote_addr
+    # "::ffff:1.2.3.4" は 1.2.3.4 と同じ接続元として扱う
+    if address.version == 6 and address.ipv4_mapped:
+        address = address.ipv4_mapped
+    return str(address)
+
+
+def _rate_limit_bucket(client_ip):
+    """失敗回数を数える単位を返す。IPv4 はアドレスそのもの、IPv6 は /64 単位。
+
+    IPv6 は 1 契約に /64 以上が割り当てられるのが普通で、アドレス単位で数えると
+    送信元を変えるだけで 1 IP あたりの上限をすり抜けられる。
+    """
+    try:
+        address = ipaddress.ip_address(client_ip)
+    except ValueError:
+        return client_ip
+    if address.version == 6:
+        return str(ipaddress.ip_network(f"{address}/64", strict=False))
+    return str(address)
 
 
 def _auth_fail_keys(client_ip):
-    return (f"{AUTH_FAIL_KEY_PREFIX}ip:{client_ip}", f"{AUTH_FAIL_KEY_PREFIX}global")
+    return (f"{AUTH_FAIL_KEY_PREFIX}ip:{_rate_limit_bucket(client_ip)}",
+            f"{AUTH_FAIL_KEY_PREFIX}global")
 
 
 def auth_lockout_seconds(client_ip):
@@ -156,9 +179,13 @@ def auth_lockout_seconds(client_ip):
     ip_count, ip_ttl, global_count, global_ttl = pipe.execute()
 
     wait = 0
-    for count, ttl, limit in ((ip_count, ip_ttl, AUTH_FAIL_LIMIT_PER_IP),
-                              (global_count, global_ttl, AUTH_FAIL_LIMIT_GLOBAL)):
+    for key, count, ttl, limit in ((ip_key, ip_count, ip_ttl, AUTH_FAIL_LIMIT_PER_IP),
+                                   (global_key, global_count, global_ttl, AUTH_FAIL_LIMIT_GLOBAL)):
         if count is not None and int(count) >= limit:
+            if ttl == -1:
+                # 期限のないキーが残っていると締め出しが永久に解けない（締め出し中は失敗を
+                # 記録しないので EXPIRE NX も掛からない）。ここで期限を付けて自然に解けるようにする
+                redis_client.expire(key, AUTH_FAIL_WINDOW_SECONDS, nx=True)
             wait = max(wait, ttl if ttl > 0 else AUTH_FAIL_WINDOW_SECONDS)
     return wait
 

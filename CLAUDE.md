@@ -64,7 +64,8 @@ ngrok（172.19.0.20）からの `/get_data` リクエストには HTTP Basic 認
 
 Basic 認証には総当たり対策のレートリミットがある（`my_flask_app.py` の `AUTH_FAIL_*` 定数）。
 
-- 失敗回数は Redis の `auth_fail:ip:<IP>` / `auth_fail:global` で数える（gunicorn の全ワーカーで共有するため）
+- 失敗回数は Redis の `auth_fail:ip:<IP>` / `auth_fail:global` で数える（gunicorn の全ワーカーで共有するため）。
+  IPv6 は送信元を変えて上限をすり抜けられないよう `/64` 単位で数える（キーは `auth_fail:ip:2001:db8::/64` の形）
 - 最初の失敗から 15 分以内に、1 IP で 10 回、全体で 100 回に達すると 429 + `Retry-After` を返す
 - 接続元 IP は ngrok が付ける `X-Forwarded-For` の**末尾**を使う。前方の値はクライアントが偽装できるので使わない
 - Redis に繋がらず回数を確認できないときは 503 を返す（制限が外れたまま通さない）
