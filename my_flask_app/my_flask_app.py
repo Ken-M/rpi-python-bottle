@@ -1,9 +1,10 @@
 from functools import wraps
 from flask import Flask, jsonify, json, render_template, request
 from flask_httpauth import HTTPBasicAuth
-from werkzeug.security import check_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 import ipaddress
 import redis
+import secrets
 from datetime import datetime, timedelta
 from my_flask_app_secret import USER_DATA
 from shared_config import POWER_ALERT_THRESHOLD_W, CO2_ALERT_THRESHOLD_PPM
@@ -71,8 +72,52 @@ def verify(username, password):
     return ok
 
 
+def _hash_method(password_hash):
+    """ハッシュ文字列 "方式$salt$hash" の方式部分（例: "scrypt:32768:8:1"）を返す。
+
+    check_password_hash() が導出まで進まない形式なら None。
+    """
+    if not isinstance(password_hash, str):
+        return None
+    parts = password_hash.split("$", 2)
+    if len(parts) != 3:
+        return None
+    return parts[0]
+
+
+def _make_dummy_hashes():
+    """USER_DATA に現れるハッシュ方式ごとに、誰のパスワードとも一致しないダミーハッシュを作る。
+
+    導出コストは方式文字列（アルゴリズムとパラメーター）で決まるので、
+    同じ方式で作ったダミーとの照合は本物との照合と同じ時間がかかる。
+    解釈できない方式は起動を止めずに飛ばす（そのユーザーのログイン時に従来どおりエラーになる）。
+    """
+    dummies = {}
+    for password_hash in USER_DATA.values():
+        method = _hash_method(password_hash)
+        if method is None or method in dummies:
+            continue
+        try:
+            dummies[method] = generate_password_hash(secrets.token_urlsafe(32), method=method)
+        except Exception:
+            continue
+    return dummies
+
+
+# 方式文字列 → ダミーハッシュ。ユーザー名の有無で応答時間が変わらないようにするために使う。
+_DUMMY_HASHES = _make_dummy_hashes()
+
+
 def check_credentials(username, password):
+    """ユーザー名の存在が応答時間から漏れないよう、ユーザーの有無にかかわらず
+    USER_DATA に現れる全方式について 1 回ずつ導出を行う。存在するユーザーの方式だけは
+    本物のハッシュで照合し、それ以外の方式はダミーで照合して結果を捨てる。
+    """
     password_hash = USER_DATA.get(username)
+    own_method = _hash_method(password_hash) if password_hash else None
+    for method, dummy_hash in _DUMMY_HASHES.items():
+        if method != own_method:
+            check_password_hash(dummy_hash, password)
     if not password_hash:
         return False
     return check_password_hash(password_hash, password)
