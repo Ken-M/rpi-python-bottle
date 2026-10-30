@@ -60,15 +60,22 @@ def verify(username, password):
     if not (username and password):
         # 認証ダイアログを出すための最初のリクエスト（資格情報なし）は失敗に数えない
         return False
-    ok = check_credentials(username, password)
     client_ip = get_tunnel_client_ip()
+    # 照合の前に「失敗」として数えておき、成功したら取り消す。後から数える方式だと、
+    # 同時に来たリクエストが上限をすり抜けるうえ、Redis が書き込みだけ拒む状態
+    # （ディスクフルによる MISCONF など）では一度も数えられずに照合し放題になる
     try:
-        if ok:
-            clear_auth_failures(client_ip)
-        else:
-            record_auth_failure(client_ip)
+        if not reserve_auth_attempt(client_ip):
+            return False
     except redis.RedisError:
-        app.logger.exception("Failed to update auth failure count")
+        app.logger.exception("Failed to record auth attempt")
+        return False
+    ok = check_credentials(username, password)
+    if ok:
+        try:
+            cancel_auth_attempt(client_ip)
+        except redis.RedisError:
+            app.logger.exception("Failed to cancel auth attempt")
     return ok
 
 
@@ -190,20 +197,32 @@ def auth_lockout_seconds(client_ip):
     return wait
 
 
-def record_auth_failure(client_ip):
+def reserve_auth_attempt(client_ip):
+    """これから照合する 1 回を失敗回数に加え、上限内なら True を返す。
+
+    上限を超えていたら False（照合させない）。
+    """
     # INCR と EXPIRE を 1 トランザクションで送り、期限なしのキーが残らないようにする。
     # EXPIRE NX なので、窓の起点は最初の失敗のまま延びない。
+    ip_key, global_key = _auth_fail_keys(client_ip)
     pipe = redis_client.pipeline()
-    for key in _auth_fail_keys(client_ip):
-        pipe.incr(key)
-        pipe.expire(key, AUTH_FAIL_WINDOW_SECONDS, nx=True)
+    pipe.incr(ip_key)
+    pipe.expire(ip_key, AUTH_FAIL_WINDOW_SECONDS, nx=True)
+    pipe.incr(global_key)
+    pipe.expire(global_key, AUTH_FAIL_WINDOW_SECONDS, nx=True)
+    ip_count, _, global_count, _ = pipe.execute()
+    return ip_count <= AUTH_FAIL_LIMIT_PER_IP and global_count <= AUTH_FAIL_LIMIT_GLOBAL
+
+
+def cancel_auth_attempt(client_ip):
+    # 認証に成功した IP の失敗回数を消し、全体の回数からは今回の 1 回だけを戻す。
+    # 窓が明けてキーが消えた直後だと DECR で -1 が残るが、EXPIRE NX で期限が付くので窓内で消える
+    ip_key, global_key = _auth_fail_keys(client_ip)
+    pipe = redis_client.pipeline()
+    pipe.delete(ip_key)
+    pipe.decr(global_key)
+    pipe.expire(global_key, AUTH_FAIL_WINDOW_SECONDS, nx=True)
     pipe.execute()
-
-
-def clear_auth_failures(client_ip):
-    # 認証に成功した IP の失敗回数だけを消す（全体の回数は窓が明けるまで残す）
-    ip_key, _ = _auth_fail_keys(client_ip)
-    redis_client.delete(ip_key)
 
 
 # Redisクライアントのセットアップ
