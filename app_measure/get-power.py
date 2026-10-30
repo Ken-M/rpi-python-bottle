@@ -616,6 +616,27 @@ def parseE1(EDT):
     logger.info("単位:" + hexUnit + ":" + str(state.unit))
 
 
+def isMeterResponse(cols, res, command_str):
+    # ERXUDP <SENDER> <DEST> <RPORT> <LPORT> <SENDERLLA> <SECURED> <DATALEN> <DATA>
+    # 電波の届く範囲にいる第三者は暗号化なしの偽の応答を送り込めるので、
+    # 接続中のスマートメーターから暗号化(SECURED=1)されて ECHONET Lite ポート(0E1A)に届いた、
+    # 今回送った要求と同じ TID の応答だけを受け付ける。
+    sender = cols[1]
+    rport = cols[3]
+    lport = cols[4]
+    secured = cols[6]
+    tid = res[4:8]
+    if (sender.upper() == ipv6Addr.upper()
+            and secured == "1"
+            and rport.upper() == "0E1A"
+            and lport.upper() == "0E1A"
+            and tid.upper() == command_str[2:4].hex().upper()):
+        return True
+    logger.warning("ERXUDP rejected: sender={}, rport={}, lport={}, secured={}, tid={}".format(
+        sender, rport, lport, secured, tid))
+    return False
+
+
 def sendCommand(command_str):
     command_base = "SKSENDTO 1 {0} 0E1A 1 {1:04X} ".format(ipv6Addr, len(command_str))
     command = command_base.encode() + command_str
@@ -658,7 +679,7 @@ def sendCommand(command_str):
             OPC_COUNT = 0
             CUR_POSITION = 24
 
-            if seoj == "028801" and ESV == "72":
+            if seoj == "028801" and ESV == "72" and isMeterResponse(cols, res, command_str):
                 state.failure_count = 0
                 while OPC_COUNT < OPC:
                     # スマートメーター(028801)から来た応答(72)なら
