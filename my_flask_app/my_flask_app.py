@@ -60,15 +60,22 @@ def verify(username, password):
     if not (username and password):
         # 認証ダイアログを出すための最初のリクエスト（資格情報なし）は失敗に数えない
         return False
-    ok = check_credentials(username, password)
     client_ip = get_tunnel_client_ip()
+    # 照合の前に「失敗」として数えておき、成功したら取り消す。後から数える方式だと、
+    # 同時に来たリクエストが上限をすり抜けるうえ、Redis が書き込みだけ拒む状態
+    # （ディスクフルによる MISCONF など）では一度も数えられずに照合し放題になる
     try:
-        if ok:
-            clear_auth_failures(client_ip)
-        else:
-            record_auth_failure(client_ip)
+        if not reserve_auth_attempt(client_ip):
+            return False
     except redis.RedisError:
-        app.logger.exception("Failed to update auth failure count")
+        app.logger.exception("Failed to record auth attempt")
+        return False
+    ok = check_credentials(username, password)
+    if ok:
+        try:
+            cancel_auth_attempt(client_ip)
+        except redis.RedisError:
+            app.logger.exception("Failed to cancel auth attempt")
     return ok
 
 
@@ -100,6 +107,9 @@ def _make_dummy_hashes():
         try:
             dummies[method] = generate_password_hash(secrets.token_urlsafe(32), method=method)
         except Exception:
+            # 黙って飛ばすと、この方式のユーザーだけ応答時間で存在が分かる状態に戻るので記録しておく
+            app.logger.warning(f"Could not build a dummy hash for method {method!r}; "
+                               "username timing protection is off for users of this method")
             continue
     return dummies
 
@@ -133,13 +143,33 @@ def get_tunnel_client_ip():
     forwarded = request.headers.get("X-Forwarded-For", "")
     candidate = forwarded.split(",")[-1].strip()
     try:
-        return str(ipaddress.ip_address(candidate))
+        address = ipaddress.ip_address(candidate)
     except ValueError:
         return request.remote_addr
+    # "::ffff:1.2.3.4" は 1.2.3.4 と同じ接続元として扱う
+    if address.version == 6 and address.ipv4_mapped:
+        address = address.ipv4_mapped
+    return str(address)
+
+
+def _rate_limit_bucket(client_ip):
+    """失敗回数を数える単位を返す。IPv4 はアドレスそのもの、IPv6 は /64 単位。
+
+    IPv6 は 1 契約に /64 以上が割り当てられるのが普通で、アドレス単位で数えると
+    送信元を変えるだけで 1 IP あたりの上限をすり抜けられる。
+    """
+    try:
+        address = ipaddress.ip_address(client_ip)
+    except ValueError:
+        return client_ip
+    if address.version == 6:
+        return str(ipaddress.ip_network(f"{address}/64", strict=False))
+    return str(address)
 
 
 def _auth_fail_keys(client_ip):
-    return (f"{AUTH_FAIL_KEY_PREFIX}ip:{client_ip}", f"{AUTH_FAIL_KEY_PREFIX}global")
+    return (f"{AUTH_FAIL_KEY_PREFIX}ip:{_rate_limit_bucket(client_ip)}",
+            f"{AUTH_FAIL_KEY_PREFIX}global")
 
 
 def auth_lockout_seconds(client_ip):
@@ -156,27 +186,43 @@ def auth_lockout_seconds(client_ip):
     ip_count, ip_ttl, global_count, global_ttl = pipe.execute()
 
     wait = 0
-    for count, ttl, limit in ((ip_count, ip_ttl, AUTH_FAIL_LIMIT_PER_IP),
-                              (global_count, global_ttl, AUTH_FAIL_LIMIT_GLOBAL)):
+    for key, count, ttl, limit in ((ip_key, ip_count, ip_ttl, AUTH_FAIL_LIMIT_PER_IP),
+                                   (global_key, global_count, global_ttl, AUTH_FAIL_LIMIT_GLOBAL)):
         if count is not None and int(count) >= limit:
+            if ttl == -1:
+                # 期限のないキーが残っていると締め出しが永久に解けない（締め出し中は失敗を
+                # 記録しないので EXPIRE NX も掛からない）。ここで期限を付けて自然に解けるようにする
+                redis_client.expire(key, AUTH_FAIL_WINDOW_SECONDS, nx=True)
             wait = max(wait, ttl if ttl > 0 else AUTH_FAIL_WINDOW_SECONDS)
     return wait
 
 
-def record_auth_failure(client_ip):
+def reserve_auth_attempt(client_ip):
+    """これから照合する 1 回を失敗回数に加え、上限内なら True を返す。
+
+    上限を超えていたら False（照合させない）。
+    """
     # INCR と EXPIRE を 1 トランザクションで送り、期限なしのキーが残らないようにする。
     # EXPIRE NX なので、窓の起点は最初の失敗のまま延びない。
+    ip_key, global_key = _auth_fail_keys(client_ip)
     pipe = redis_client.pipeline()
-    for key in _auth_fail_keys(client_ip):
-        pipe.incr(key)
-        pipe.expire(key, AUTH_FAIL_WINDOW_SECONDS, nx=True)
+    pipe.incr(ip_key)
+    pipe.expire(ip_key, AUTH_FAIL_WINDOW_SECONDS, nx=True)
+    pipe.incr(global_key)
+    pipe.expire(global_key, AUTH_FAIL_WINDOW_SECONDS, nx=True)
+    ip_count, _, global_count, _ = pipe.execute()
+    return ip_count <= AUTH_FAIL_LIMIT_PER_IP and global_count <= AUTH_FAIL_LIMIT_GLOBAL
+
+
+def cancel_auth_attempt(client_ip):
+    # 認証に成功した IP の失敗回数を消し、全体の回数からは今回の 1 回だけを戻す。
+    # 窓が明けてキーが消えた直後だと DECR で -1 が残るが、EXPIRE NX で期限が付くので窓内で消える
+    ip_key, global_key = _auth_fail_keys(client_ip)
+    pipe = redis_client.pipeline()
+    pipe.delete(ip_key)
+    pipe.decr(global_key)
+    pipe.expire(global_key, AUTH_FAIL_WINDOW_SECONDS, nx=True)
     pipe.execute()
-
-
-def clear_auth_failures(client_ip):
-    # 認証に成功した IP の失敗回数だけを消す（全体の回数は窓が明けるまで残す）
-    ip_key, _ = _auth_fail_keys(client_ip)
-    redis_client.delete(ip_key)
 
 
 # Redisクライアントのセットアップ
