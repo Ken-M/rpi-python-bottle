@@ -2,7 +2,8 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- viewport-fit=cover: 横向きのスマホでノッチ側まで描き、余白は safe-area-inset で取る -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <!-- ブラウザ既定 UI（スクロールバー・キャンバス背景）を配色に追随させ、初期描画の白フラッシュを抑える -->
 <meta name="color-scheme" content="light dark">
 <title>家の電気と空気</title>
@@ -62,13 +63,15 @@ body, h1, h2, p, ul, figure, table { margin: 0; padding: 0; }
 ul { list-style: none; }
 
 body {
+  --gutter: clamp(1rem, 4vi, 2.5rem);
   font-family: "BIZ UDPGothic", "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
   font-variant-numeric: tabular-nums;
   background: var(--paper);
   color: var(--ink);
   min-block-size: 100dvb;
-  padding-block: clamp(1rem, 3vb, 2rem) 3rem;
-  padding-inline: clamp(1rem, 4vi, 2.5rem);
+  /* 横向きのスマホではノッチやホームバーの分だけ余白を広げる */
+  padding-block: clamp(1rem, 3vb, 2rem) max(3rem, env(safe-area-inset-bottom));
+  padding-inline: max(var(--gutter), env(safe-area-inset-left)) max(var(--gutter), env(safe-area-inset-right));
   line-height: 1.6;
 }
 
@@ -96,7 +99,7 @@ main {
   align-items: baseline;
   justify-content: space-between;
   gap: 0.25rem 1.5rem;
-  margin-block-end: clamp(1.5rem, 5vb, 3rem);
+  margin-block-end: clamp(1.5rem, 5vb, 2.5rem);
 }
 .masthead h1 { font-size: 1rem; font-weight: 700; }
 .link-state {
@@ -116,22 +119,25 @@ body[data-link="down"] .link-dot { background: none; box-shadow: inset 0 0 0 1.5
 body[data-link="down"] .link-state { color: var(--warn); }
 
 /* ------------------------------------------------------------------ 配置
-   狭い幅では縦一列。広い幅では電気と料金を横に並べ、部屋の空気を下に通す。 */
-#content { display: grid; gap: clamp(2.5rem, 7vb, 4rem) 4rem; }
+   スマホ縦・タブレット縦は縦一列（電気 → 料金 → 部屋の空気）。
+   タブレット横・PC は左に電気を通し、右に料金と部屋の空気を積む。 */
+#content { display: grid; gap: clamp(2.5rem, 7vb, 3.5rem) 3.5rem; }
 @container page (min-width: 52rem) {
   #content {
-    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
-    grid-template-areas: "power tariff" "air air";
+    grid-template-columns: minmax(0, 1.18fr) minmax(0, 1fr);
+    grid-template-areas: "power tariff" "power air";
   }
-  .power { grid-area: power; }
+  .power { grid-area: power; display: flex; flex-direction: column; }
   .tariff { grid-area: tariff; }
   .air { grid-area: air; }
+  /* 右の列のほうが背が高いので、プラグの内訳は左の列の下端に揃える */
+  .readout { flex: 1; align-content: space-between; }
 }
 
 h2 {
   font-size: 1rem;
   font-weight: 700;
-  margin-block-end: 1rem;
+  margin-block-end: 0.75rem;
 }
 
 /* ------------------------------------------------------------------ 電気
@@ -139,30 +145,49 @@ h2 {
 .power { container: power / inline-size; }
 
 .headroom {
+  font-size: clamp(1.25rem, 5cqi, 1.75rem);
+  line-height: 1.15;
+}
+.headroom .lead { display: block; }
+.headroom .line {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   column-gap: 0.35em;
-  font-size: clamp(1.25rem, 5cqi, 1.953rem);
-  line-height: 1.1;
+  margin-block-start: 0.2em;
 }
-.headroom .lead { flex-basis: 100%; margin-block-end: 0.15em; }
+/* 最大は最小の 2.5 倍以内（ブラウザの文字拡大が効かなくならないように） */
 .headroom .figure {
-  font-size: clamp(3.5rem, 23cqi, 8rem);
+  font-size: clamp(3.5rem, 20cqi, 8rem);
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 0.9;
 }
 .headroom .figure .u { font-size: 0.3em; letter-spacing: 0; color: inherit; }
 [data-power-state="warn"] .headroom .figure { color: var(--warn); }
-[data-power-state="alert"] .headroom .figure { color: var(--alarm); }
+[data-power-state="alert"] .headroom .line { color: var(--alarm); font-weight: 700; }
 
-/* 目盛り: 1 区画 = 1,000 W。使用中の分を塗り、警報点までの「使える分」を斜線で示す。 */
-.scale {
-  --used-at: 0%; --alarm-at: 80%; --step: 16.667%;
+/* 目盛り: 1 区画 = 1,000 W。使用中の分を塗り、警報点までの「使える分」を斜線で示す。
+   警報点の数字は目盛りの上、基線の左に旗のように付ける（下に置くと上限の数字とぶつかる） */
+.gauge { --used-at: 0%; --alarm-at: 80%; --step: 16.667%; margin-block-start: 1.5rem; }
+.gauge-flag {
   position: relative;
-  block-size: 1.5rem;
-  margin-block-start: 1.75rem;
+  block-size: 1.4em;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--alarm);
+}
+.gauge-flag span {
+  position: absolute;
+  inset-inline-start: var(--alarm-at);
+  transform: translateX(-100%);
+  padding-inline-end: 0.6rem;
+  white-space: nowrap;
+}
+.scale {
+  position: relative;
+  block-size: clamp(1.5rem, 4.5cqi, 2.25rem);
+  margin-block-start: 0.5rem;
   background: var(--track);
 }
 .scale > * { position: absolute; inset-block: 0; }
@@ -181,9 +206,9 @@ h2 {
   background: repeating-linear-gradient(90deg,
     transparent 0 calc(var(--step) - 2px), var(--paper) calc(var(--step) - 2px) var(--step));
 }
-/* 警報点の基線。塗りが越えても見えるよう、目盛りの上下に突き出させて最前面に置く */
-.scale-alarm {
-  inset-block: -0.5rem;
+/* 警報点の基線。上の旗までつなぎ、塗りが越えても見えるよう最前面に置く */
+.scale .scale-alarm {
+  inset-block: -1.75rem -0.5rem;
   inset-inline-start: var(--alarm-at);
   inline-size: 3px;
   transform: translateX(-1.5px);
@@ -195,9 +220,11 @@ h2 {
   background: repeating-linear-gradient(-45deg, var(--warn) 0 1.5px, transparent 1.5px 6px);
 }
 [data-power-state="alert"] .scale-used { background: var(--alarm); }
+/* 塗りが警報色になるので、基線はインクの色で浮かせる */
+[data-power-state="alert"] .scale .scale-alarm { background: var(--ink); }
 /* 5 分以上更新が無いときは、古い値を自信ありげに見せないよう主役を退かせる */
 .power[data-stale] .headroom .figure { color: var(--muted); }
-.power[data-stale] .scale { opacity: 0.45; }
+.power[data-stale] .gauge { opacity: 0.45; }
 
 .scale-legend {
   position: relative;
@@ -206,51 +233,72 @@ h2 {
   font-size: 0.8rem;
   color: var(--muted);
 }
-.scale-legend span { position: absolute; inset-block-start: 0; white-space: nowrap; }
-.scale-legend .at-start { inset-inline-start: 0; }
-.scale-legend .at-end { inset-inline-end: 0; }
-.scale-legend .at-alarm { transform: translateX(-50%); color: var(--alarm); }
-/* 狭い幅では警報点と上限のラベルが重なるので、上限を落として警報点を残す */
-@container power (max-width: 24rem) {
-  .scale-legend .at-end { display: none; }
+.scale-legend span {
+  position: absolute;
+  inset-block-start: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+.scale-legend span:first-child { transform: none; }
+.scale-legend span:last-child { transform: translateX(-100%); }
+/* 狭い幅では両端の数字だけ。区切りごとの数字は幅に余裕があるときに出す */
+.scale-legend span:not(:first-child, :last-child) { display: none; }
+@container power (min-width: 36rem) {
+  .scale-legend span:not(:first-child, :last-child) { display: inline; }
 }
 
+.readout { display: grid; gap: 1.25rem; margin-block-start: 1rem; }
 .now-used {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
   gap: 0.25rem 1rem;
-  margin-block-start: 1rem;
-  font-size: 1.25rem;
+  font-size: clamp(1.125rem, 3.2cqi, 1.5rem);
 }
 .now-used strong { font-weight: 700; }
 .note { margin-block-start: 0.5rem; font-weight: 700; }
 [data-power-state="warn"] .note { color: var(--warn); }
-[data-power-state="alert"] .note { color: var(--alarm); }
+/* 警報時は取るべき行動を地の色で抜いて、文言でも色でも目に入るようにする */
+[data-power-state="alert"] .note {
+  padding: 0.6rem 0.85rem;
+  background: var(--alarm);
+  color: var(--paper);
+}
 .waiting { font-size: 1.25rem; color: var(--muted); }
 
 /* 家全体のうち個別に測れている分。主役の真下に、内訳として小さく並べる */
-.plugs {
-  margin-block-start: 1.5rem;
-  border-block-start: 1px solid var(--rule);
-}
+.plugs { border-block-start: 1px solid var(--rule); }
 .plugs li {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto 4.5rem;
   align-items: baseline;
   gap: 1rem;
-  padding-block: 0.5rem;
+  padding-block: 0.6rem;
   border-block-end: 1px solid var(--rule);
 }
 .plugs .n { font-weight: 700; text-align: end; }
 .plugs .age { text-align: end; }
 
+/* タブレット縦のように電気の欄が広いときは、いまの使用量と内訳を横に並べる */
+@container power (min-width: 40rem) {
+  .readout { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 2.5rem; align-items: start; }
+  .now-used { flex-direction: column; gap: 0.1rem; }
+}
+
 /* ------------------------------------------------------------------ 電気料金
    今日 24 時間の単価を棒の高さで並べる。過ぎた時間は薄く、いまの時間は濃く。 */
-.rate { font-size: 1.25rem; }
-.rate .price { font-size: 1.953rem; font-weight: 700; margin-inline-start: 0.25em; }
-.pace { margin-block-start: 0.25rem; color: var(--muted); }
+.tariff { container: tariff / inline-size; }
+.rate-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0 1.5rem;
+}
+.rate { font-size: 1.125rem; }
+.rate .price { font-size: clamp(1.875rem, 6cqi, 2.5rem); font-weight: 700; margin-inline-start: 0.25em; }
+.pace { color: var(--muted); }
 
 .day {
   position: relative;
@@ -261,7 +309,7 @@ h2 {
   grid-template-columns: repeat(24, 1fr);
   align-items: end;
   gap: 2px;
-  block-size: 5rem;
+  block-size: clamp(4rem, 12cqi, 5.5rem);
   border-block-end: 1px solid var(--ink);
 }
 .day-bars i { display: block; background: color-mix(in srgb, var(--ink) 42%, transparent); }
@@ -286,55 +334,146 @@ h2 {
 .day-axis span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
 .day-axis span:first-child { transform: none; }
 .day-axis span:last-child { transform: translateX(-100%); }
+/* 区分の帯。棒の高さだけでは区分名が分からないので、幅に余裕があれば時刻の目盛りと置き換える */
+.day-bands { display: none; margin-block-start: 0.5rem; line-height: 1.35; }
+.day-bands p {
+  min-inline-size: 0;
+  padding-inline-start: 0.4rem;
+  border-inline-start: 1px solid var(--rule);
+  overflow: hidden;
+  white-space: nowrap;
+}
+.day-bands p[data-now] { border-inline-start-color: var(--ink); }
+.day-bands span { display: block; }
+.day-bands .band-name { font-size: 0.875rem; font-weight: 700; }
+.day-bands .band-hours { font-size: 0.8rem; color: var(--muted); }
+@container tariff (min-width: 26rem) {
+  .day-axis { display: none; }
+  .day-bands { display: flex; }
+}
 .next { margin-block-start: 0.75rem; }
 
 /* ------------------------------------------------------------------ 部屋の空気
-   部屋 × 測定項目の表。同じ測定項目が横一列に並ぶので、部屋どうしを目で比べられる。 */
-.air { border-block-start: 2px solid var(--ink); padding-block-start: 1rem; }
+   部屋を行、測定項目を列にした表。列は測定項目の数（4）で増えないので、狭い画面でも収まる。
+   単位は列見出しに 1 回だけ書き、更新時刻は部屋名の下に添える。 */
+.air {
+  container: air / inline-size;
+  border-block-start: 2px solid var(--ink);
+  padding-block-start: 1rem;
+}
+/* 万一収まらないときは表だけを横スクロールさせる。キーボードでもスクロールできるよう tabindex を付けている */
+.matrix-wrap { overflow-x: auto; }
+.matrix-wrap:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
 .matrix {
   inline-size: 100%;
   border-collapse: collapse;
   table-layout: fixed;
 }
-.matrix th, .matrix td {
+/* table-layout: fixed は最初の行で列幅が決まるため、見出し行のセルに幅を指定する */
+.matrix thead td:first-child { inline-size: 4.75rem; }
+.matrix thead th[data-scaled] { inline-size: 6rem; }
+.matrix thead th {
   text-align: start;
-  padding: 0.65rem 0.75rem 0.65rem 0;
-  vertical-align: baseline;
+  vertical-align: bottom;
+  padding: 0 0.4rem 0.5rem 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.3;
 }
-/* table-layout: fixed は最初の行で列幅が決まるため、見出し行の角セルに指定する */
-.matrix thead td:first-child { inline-size: 5.5rem; }
-.matrix thead th { font-weight: 700; padding-block-start: 0; }
-.matrix tbody th { font-weight: 400; color: var(--muted); }
-.matrix tbody tr > * { border-block-start: 1px solid var(--rule); }
-.matrix td { font-size: 1.25rem; font-weight: 700; }
-.matrix td .u { font-size: 0.64em; }
+.matrix .unit { display: block; font-weight: 400; color: var(--muted); }
+.matrix tbody th, .matrix td {
+  text-align: start;
+  vertical-align: top;
+  padding: 0.65rem 0.4rem 0.65rem 0;
+  border-block-start: 1px solid var(--rule);
+  line-height: 1.3;
+}
+.matrix tbody tr:last-child > * { border-block-end: 1px solid var(--rule); }
+.matrix tbody th { font-size: 0.875rem; font-weight: 700; }
+.matrix tbody th .age { display: block; font-weight: 400; font-size: 0.75rem; }
+.matrix td { font-size: 1.125rem; font-weight: 700; }
 .matrix .missing { color: var(--muted); font-weight: 400; }
-.matrix td[data-state="warn"] .n { color: var(--warn); }
-.matrix td[data-state="alert"] .n { color: var(--alarm); }
-.matrix .ages td { font-size: inherit; font-weight: 400; }
-.matrix .row-unit { display: none; }
+.matrix td[data-state="warn"] { color: var(--warn); }
+.matrix td[data-state="alert"] { color: var(--alarm); }
+.matrix .flag { font-size: 0.75rem; margin-inline-start: 0.25em; white-space: nowrap; }
 
 /* 警報点までの余裕を示すトラック。閾値を持つ測定項目（CO2）にだけ付く */
-.track { block-size: 4px; max-inline-size: 6rem; margin-block-start: 0.35rem; background: var(--track); }
+.track { block-size: 4px; max-inline-size: 4.5rem; margin-block-start: 0.4rem; background: var(--track); }
 .track > i { display: block; block-size: 100%; background: var(--muted); }
 [data-state="warn"] .track > i { background: var(--warn); }
 [data-state="alert"] .track > i { background: var(--alarm); }
 
-@container page (max-width: 34rem) {
-  .matrix thead td:first-child { inline-size: 3.75rem; }
-  .matrix thead th { font-size: 0.8rem; }
-  .matrix tbody th { font-size: 0.8rem; }
-  .matrix td { font-size: 1rem; }
-  .matrix th, .matrix td { padding-inline-end: 0.4rem; }
-  /* 4 部屋が並ぶと単位で列があふれるので、単位は行見出しの下にまとめる */
-  .matrix td .u { display: none; }
-  .matrix .row-unit { display: block; font-size: 0.8rem; }
+@container air (min-width: 26rem) {
+  .matrix thead td:first-child { inline-size: 5.5rem; }
+  .matrix thead th[data-scaled] { inline-size: 7.5rem; }
+  .matrix thead th { font-size: 0.875rem; }
+  .matrix .unit { display: inline; margin-inline-start: 0.35em; }
+  .matrix tbody th { font-size: 0.9375rem; }
+  .matrix td { font-size: 1.375rem; line-height: 1.2; }
+  .track { max-inline-size: 7rem; }
+}
+@container air (min-width: 40rem) {
+  .matrix thead td:first-child { inline-size: 9rem; }
+  .matrix thead th[data-scaled] { inline-size: 11rem; }
+  .matrix thead th { font-size: 0.9375rem; }
+  .matrix tbody th { font-size: 1.0625rem; }
+  .matrix tbody th, .matrix td { padding-block: 0.75rem; }
+  .matrix td { font-size: 1.625rem; }
+  .matrix .flag { font-size: 0.875rem; }
+  .track { block-size: 5px; max-inline-size: 8.75rem; }
 }
 
 footer {
   margin-block-start: 3rem;
   font-size: 0.8rem;
   color: var(--muted);
+}
+
+/* ------------------------------------------------------------------ スマホ横
+   高さが足りないので、スクロールせずに一目で見られるよう左右 2 列に詰める。
+   幅ではなく高さで判断するため、ここだけはコンテナクエリでなくメディアクエリを使う。 */
+@media (orientation: landscape) and (max-height: 32rem) {
+  body { padding-block: 0.75rem max(0.75rem, env(safe-area-inset-bottom)); }
+  .masthead { margin-block-end: 0.5rem; }
+  .masthead h1 { font-size: 0.875rem; }
+  #content {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    grid-template-areas: "power tariff" "power air";
+    gap: 0.5rem 2.25rem;
+  }
+  .power { grid-area: power; align-self: center; }
+  .tariff { grid-area: tariff; }
+  .air { grid-area: air; padding-block-start: 0.4rem; }
+  h2 { font-size: 0.8rem; margin-block-end: 0.15rem; }
+
+  .headroom { font-size: 1rem; }
+  .headroom .figure { font-size: clamp(3rem, 17cqi, 4.5rem); }
+  .gauge { margin-block-start: 1rem; }
+  .scale { block-size: 1.25rem; }
+  .readout { gap: 0.5rem; margin-block-start: 0.5rem; }
+  .now-used { font-size: 1rem; }
+  /* 内訳は 1 行に並べ、更新時刻は省く */
+  .plugs { display: flex; flex-wrap: wrap; gap: 0 1.5rem; padding-block-start: 0.4rem; font-size: 0.8rem; }
+  .plugs li { display: flex; gap: 0.35em; padding: 0; border: 0; }
+  .plugs .age { display: none; }
+
+  .rate { font-size: 0.9375rem; }
+  .rate .price { font-size: 1.375rem; }
+  .pace, .next { font-size: 0.75rem; }
+  .next { margin-block-start: 0; }
+  .day { margin-block-start: 1rem; }
+  .day-bars { block-size: 1.4rem; }
+  .day-axis { margin-block-start: 0.15rem; }
+
+  .matrix thead td:first-child { inline-size: 3.75rem; }
+  .matrix thead th[data-scaled] { inline-size: 5rem; }
+  .matrix thead th { padding-block-end: 0.2rem; padding-inline-end: 0.25rem; font-size: 0.75rem; }
+  .matrix .unit { display: inline; margin-inline-start: 0.2em; }
+  .matrix tbody th, .matrix td { padding-block: 0.15rem; padding-inline-end: 0.25rem; }
+  .matrix tbody th { font-size: 0.75rem; }
+  .matrix td { font-size: 0.875rem; }
+  .matrix tbody th .age, .matrix .track { display: none; }
+  footer { display: none; }
 }
 
 /* ------------------------------------------------------------------ 動き
@@ -366,51 +505,56 @@ footer {
       <p class="headroom">
         {% if hero.over %}
         <span class="lead">警報点の {{ hero.alarm_text }} W を</span>
-        <span class="figure">{{ hero.headroom_text }}<span class="u">W</span></span>
-        <span class="tail">超えています</span>
+        <span class="line"><span class="figure">{{ hero.headroom_text }}<span class="u">W</span></span> <span class="tail">超えています</span></span>
         {% else %}
-        <span class="lead">あと</span>
-        <span class="figure">{{ hero.headroom_text }}<span class="u">W</span></span>
-        <span class="tail">使えます</span>
+        <span class="lead">警報点まで、あと</span>
+        <span class="line"><span class="figure">{{ hero.headroom_text }}<span class="u">W</span></span> <span class="tail">使えます</span></span>
         {% endif %}
       </p>
-      <div class="scale" style="--used-at: {{ hero.pct }}%; --alarm-at: {{ hero.alarm_pct }}%; --step: {{ hero.step_pct }}%" aria-hidden="true">
-        <div class="scale-used"></div>
-        <div class="scale-room"></div>
-        <div class="scale-alarm"></div>
+      <div class="gauge" style="--used-at: {{ hero.pct }}%; --alarm-at: {{ hero.alarm_pct }}%; --step: {{ hero.step_pct }}%" aria-hidden="true">
+        <p class="gauge-flag"><span>警報点 {{ hero.alarm_text }} W</span></p>
+        <div class="scale">
+          <div class="scale-used"></div>
+          <div class="scale-room"></div>
+          <div class="scale-alarm"></div>
+        </div>
+        <p class="scale-legend">
+          {% for t in hero.ticks %}<span style="inset-inline-start: {{ t.pct }}%">{{ t.text }}{% if loop.last %} W{% endif %}</span>{% endfor %}
+        </p>
       </div>
-      <p class="scale-legend" aria-hidden="true">
-        <span class="at-start">0</span>
-        <span class="at-alarm" style="inset-inline-start: {{ hero.alarm_pct }}%">{{ hero.alarm_text }}</span>
-        <span class="at-end">{{ hero.max }} W</span>
-      </p>
       {% endif %}
-      <p class="now-used">
-        <span>いま <strong>{{ hero.text }}</strong> W を使用中</span>
-        {% if hero.updated_at %}<span class="age" data-updated="{{ hero.updated_at }}" title="{{ hero.updated_at }}">{{ hero.updated_at }}</span>{% endif %}
-      </p>
-      {% if hero.note %}<p class="note">{{ hero.note }}</p>{% endif %}
+      <div class="readout">
+        <div>
+          <p class="now-used">
+            <span>いま <strong>{{ hero.text }}</strong> W を使用中</span>
+            {% if hero.updated_at %}<span class="age" data-updated="{{ hero.updated_at }}" title="{{ hero.updated_at }}">{{ hero.updated_at }}</span>{% endif %}
+          </p>
+          {% if hero.note %}<p class="note">{{ hero.note }}</p>{% endif %}
+        </div>
+        {% if plugs %}
+        <ul class="plugs" aria-label="個別に測っているプラグ">
+          {% for r in plugs %}
+          <li>
+            <span title="{{ r.key }}">{{ r.label }}</span>
+            <span class="n">{{ r.text }}<span class="u">{{ r.unit }}</span></span>
+            {% if r.updated_at %}<span class="age" data-updated="{{ r.updated_at }}" title="{{ r.updated_at }}">{{ r.updated_at }}</span>{% else %}<span></span>{% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      </div>
       {% else %}
       <p class="waiting">スマートメーターからの最初の値を待っています。</p>
-      {% endif %}
-      {% if plugs %}
-      <ul class="plugs" aria-label="個別に測っているプラグ">
-        {% for r in plugs %}
-        <li>
-          <span title="{{ r.key }}">{{ r.label }}</span>
-          <span class="n">{{ r.text }}<span class="u">{{ r.unit }}</span></span>
-          {% if r.updated_at %}<span class="age" data-updated="{{ r.updated_at }}" title="{{ r.updated_at }}">{{ r.updated_at }}</span>{% else %}<span></span>{% endif %}
-        </li>
-        {% endfor %}
-      </ul>
       {% endif %}
     </section>
 
     <section class="tariff" aria-labelledby="tariff-heading">
       <h2 id="tariff-heading">電気料金</h2>
       {% if tariff %}
-      <p class="rate">いまは{{ tariff.label }}<span class="price">{{ tariff.price }}</span><span class="u">円/kWh</span></p>
-      {% if tariff.per_hour %}<p class="pace">このまま 1 時間使うと約 {{ tariff.per_hour }} 円</p>{% endif %}
+      <div class="rate-row">
+        <p class="rate">いまは{{ tariff.label }}<span class="price">{{ tariff.price }}</span><span class="u">円/kWh</span></p>
+        {% if tariff.per_hour %}<p class="pace">このまま 1 時間使うと約 {{ tariff.per_hour }} 円</p>{% endif %}
+      </div>
       <div class="day" style="--now-at: {{ tariff.now_pct }}%" aria-hidden="true">
         <div class="day-bars">
           {% for h in tariff.hours %}<i data-when="{{ h.when }}" style="block-size: {{ h.pct }}%" title="{{ h.title }}"></i>{% endfor %}
@@ -424,8 +568,11 @@ footer {
         <span style="inset-inline-start: 75%">18</span>
         <span style="inset-inline-start: 100%">24時</span>
       </p>
+      <div class="day-bands" aria-hidden="true">
+        {% for s in tariff.segments %}<p style="inline-size: {{ s.width }}%"{% if s.now %} data-now{% endif %}><span class="band-name">{{ s.name }}</span><span class="band-hours">{{ s.hours }}</span></p>{% endfor %}
+      </div>
       <p class="visually-hidden">今日の単価は、{{ tariff.spans | join('、') }}です。</p>
-      {% if tariff.next_change %}<p class="next">{{ tariff.next_change }}</p>{% endif %}
+      {% if tariff.next_change %}<p class="next">次は <strong>{{ tariff.next_change.when }}</strong>（{{ tariff.next_change.price }} 円）</p>{% endif %}
       {% else %}
       <p class="empty">料金の時間帯がまだ届いていません。計測サービスが次に値を書き込むと表示されます。</p>
       {% endif %}
@@ -434,38 +581,34 @@ footer {
     <section class="air" aria-labelledby="air-heading">
       <h2 id="air-heading">部屋の空気</h2>
       {% if matrix %}
-      <table class="matrix">
-        <caption class="visually-hidden">部屋ごとの気温・湿度・CO₂ 濃度・明るさ</caption>
-        <thead>
-          <tr>
-            <td></td>
-            {% for name in matrix.columns %}<th scope="col">{{ name }}</th>{% endfor %}
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in matrix.rows %}
-          <tr>
-            <th scope="row">{{ row.label }}{% if row.unit %}<span class="row-unit">{{ row.unit }}</span>{% endif %}</th>
-            {% for cell in row.cells %}
-            {% if cell %}
-            <td data-state="{{ cell.state }}" title="{{ cell.key }}">
-              <span class="n">{{ cell.text }}</span><span class="u">{{ cell.unit }}</span>
-              {% if cell.pct is not none %}<div class="track" aria-hidden="true"><i style="inline-size: {{ cell.pct }}%"></i></div>{% endif %}
-            </td>
-            {% else %}
-            <td class="missing">&mdash;</td>
-            {% endif %}
+      <div class="matrix-wrap" role="region" aria-labelledby="air-heading" tabindex="0">
+        <table class="matrix">
+          <caption class="visually-hidden">部屋ごとの気温・湿度・CO₂ 濃度・明るさ</caption>
+          <thead>
+            <tr>
+              <td></td>
+              {% for c in matrix.columns %}<th scope="col"{% if c.scaled %} data-scaled{% endif %}>{{ c.label }}<span class="unit">{{ c.unit }}</span></th>{% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for room in matrix.rooms %}
+            <tr>
+              <th scope="row">{{ room.name }}{% if room.updated_at %}<span class="age" data-updated="{{ room.updated_at }}" title="{{ room.updated_at }}">{{ room.updated_at }}</span>{% endif %}</th>
+              {% for cell in room.cells %}
+              {% if cell %}
+              <td data-state="{{ cell.state }}" title="{{ cell.key }}">
+                <span class="n">{{ cell.text }}</span>{% if cell.flag %}<span class="flag">{{ cell.flag }}</span>{% endif %}
+                {% if cell.pct is not none %}<div class="track" aria-hidden="true"><i style="inline-size: {{ cell.pct }}%"></i></div>{% endif %}
+              </td>
+              {% else %}
+              <td class="missing">&mdash;</td>
+              {% endif %}
+              {% endfor %}
+            </tr>
             {% endfor %}
-          </tr>
-          {% endfor %}
-          <tr class="ages">
-            <th scope="row">更新</th>
-            {% for stamp in matrix.ages %}
-            <td>{% if stamp %}<span class="age" data-updated="{{ stamp }}" title="{{ stamp }}">{{ stamp }}</span>{% else %}&mdash;{% endif %}</td>
-            {% endfor %}
-          </tr>
-        </tbody>
-      </table>
+          </tbody>
+        </table>
+      </div>
       {% else %}
       <p class="empty">部屋のセンサーからの値がまだありません。</p>
       {% endif %}
