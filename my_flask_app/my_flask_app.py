@@ -67,6 +67,11 @@ PRICE_BANDS = {
     "day": ("昼間", PRICE_DAY_TIME),
     "life": ("生活時間帯", PRICE_LIFE_TIME),
 }
+# 24 時間の棒の下に区分名を添えるときの短い名前（1 区画が狭いので 2 文字に揃える）
+PRICE_BAND_SHORT = {"night": "夜間", "day": "昼間", "life": "生活"}
+
+# 閾値に近い・超えたことを、色だけでなく文言でも示す
+STATE_FLAGS = {"warn": "高め", "alert": "超過"}
 
 
 @auth.verify_password
@@ -352,13 +357,15 @@ def build_reading(key, entry):
         return None
     label, unit, value_range = sensor_meta(key)
     number = as_float(entry["value"])
+    state = alert_state(key, number)
     return {
         "key": key,
         "label": label,
         "unit": unit,
         "text": format_number(entry["value"]),
         "pct": scale_percent(number, *value_range) if value_range else None,
-        "state": alert_state(key, number),
+        "state": state,
+        "flag": STATE_FLAGS.get(state, ""),
         "updated_at": entry.get("updated_at"),
     }
 
@@ -400,39 +407,43 @@ def build_hero(entry):
         "alarm_pct": scale_percent(POWER_ALERT_THRESHOLD_W, 0, POWER_SCALE_MAX_W),
         "alarm_text": alarm_text,
         "step_pct": round(POWER_SCALE_STEP_W / POWER_SCALE_MAX_W * 100, 3),
-        "max": f"{POWER_SCALE_MAX_W:,}",
+        # 目盛りの区切りごとの数字。広い画面では全部、狭い画面では両端だけを出す
+        "ticks": [{"text": f"{w:,}", "pct": round(w / POWER_SCALE_MAX_W * 100, 3)}
+                  for w in range(0, POWER_SCALE_MAX_W + 1, POWER_SCALE_STEP_W)],
     }
 
 
 def build_matrix(data):
-    """部屋 × 測定項目の表を組み立てる。値が 1 つも無い行・列は落とす。"""
-    columns = [
-        (name, suffix) for name, suffix in ROOMS
-        if any(f"{prefix}_{suffix}" in data for _, prefix in MEASURES)
-    ]
-    if not columns:
+    """部屋 × 測定項目の表を組み立てる。値が 1 つも無い部屋・測定項目は落とす。
+
+    部屋を行、測定項目を列にする。スマホの縦画面は横幅が足りないので、
+    列の数を測定項目（4 つで増えない）に固定し、単位は列見出しに 1 回だけ書く。
+    """
+    def reading(prefix, suffix):
+        key = f"{prefix}_{suffix}"
+        return build_reading(key, data.get(key))
+
+    measures = [(label, prefix) for label, prefix in MEASURES
+                if any(reading(prefix, suffix) for _, suffix in ROOMS)]
+    if not measures:
         return None
 
-    rows = []
-    for label, prefix in MEASURES:
-        cells = [build_reading(f"{prefix}_{suffix}", data.get(f"{prefix}_{suffix}"))
-                 for _, suffix in columns]
-        if any(cells):
-            # 狭い画面ではセルから単位を外して行見出しに寄せるので、行の単位も持たせる
-            unit = next(cell["unit"] for cell in cells if cell)
-            rows.append({"label": label, "unit": unit, "cells": cells})
-    if not rows:
-        return None
+    rooms = []
+    for name, suffix in ROOMS:
+        cells = [reading(prefix, suffix) for _, prefix in measures]
+        if not any(cells):
+            continue
+        # 部屋ごとの更新時刻は各センサーでほぼ同じなので、部屋名の下に 1 つだけ出す
+        stamps = [cell["updated_at"] for cell in cells if cell and cell["updated_at"]]
+        rooms.append({"name": name, "updated_at": max(stamps) if stamps else None, "cells": cells})
 
-    # 部屋ごとの更新時刻は各センサーでほぼ同じなので、列に 1 つだけ出す
-    ages = []
-    for _, suffix in columns:
-        stamps = [data[key]["updated_at"]
-                  for key in (f"{prefix}_{suffix}" for _, prefix in MEASURES)
-                  if isinstance(data.get(key), dict) and data[key].get("updated_at")]
-        ages.append(max(stamps) if stamps else None)
+    columns = []
+    for label, prefix in measures:
+        _, unit, value_range = sensor_meta(prefix)
+        # 余裕のトラックを付ける列（CO2）は数字の横に「高め」が並ぶので幅を広めに取る
+        columns.append({"label": label, "unit": unit, "scaled": value_range is not None})
 
-    return {"columns": [name for name, _ in columns], "rows": rows, "ages": ages}
+    return {"columns": columns, "rooms": rooms}
 
 
 def build_tariff(entry, watts, now=None):
@@ -474,12 +485,24 @@ def build_tariff(entry, watts, now=None):
     spans = [f"{r['start']}時から{r['end']}時 {PRICE_BANDS[r['band']][0]} "
              f"{PRICE_BANDS[r['band']][1]:.2f} 円" for r in runs]
 
+    # 棒の下に添える区分の帯。区画が狭いと文字があふれるので、
+    # 区分名は 2 時間以上、時刻は 3 時間以上続く区分にだけ付ける
+    segments = []
+    for r in runs:
+        length = r["end"] - r["start"]
+        segments.append({
+            "width": round(length / 24 * 100, 3),
+            "name": PRICE_BAND_SHORT[r["band"]] if length >= 2 else "",
+            "hours": f"{r['start']}〜{r['end']}時" if length >= 3 else "",
+            "now": r["start"] <= hour < r["end"],
+        })
+
     next_change = None
     for h in range(hour + 1, len(bands)):
         if bands[h] != bands[hour]:
             next_label, next_price = PRICE_BANDS[bands[h]]
             day = "明日の" if h >= 24 else ""
-            next_change = f"{day}{h % 24}時から{next_label}（{next_price:.2f} 円）"
+            next_change = {"when": f"{day}{h % 24}時から{next_label}", "price": f"{next_price:.2f}"}
             break
 
     per_hour = None
@@ -494,6 +517,7 @@ def build_tariff(entry, watts, now=None):
         "hours": hours,
         "now_pct": round((hour + 0.5) / 24 * 100, 2),
         "spans": spans,
+        "segments": segments,
     }
 
 
