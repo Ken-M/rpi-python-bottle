@@ -5,9 +5,15 @@ from werkzeug.security import check_password_hash, generate_password_hash
 import ipaddress
 import redis
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from my_flask_app_secret import USER_DATA
-from shared_config import POWER_ALERT_THRESHOLD_W, CO2_ALERT_THRESHOLD_PPM
+from shared_config import (
+    POWER_ALERT_THRESHOLD_W,
+    CO2_ALERT_THRESHOLD_PPM,
+    PRICE_NIGHT_TIME,
+    PRICE_DAY_TIME,
+    PRICE_LIFE_TIME,
+)
 
 auth = HTTPBasicAuth()
 app = Flask(__name__)
@@ -41,17 +47,26 @@ PLUG_KEYS = ("KEN_PLUG", "YACHI_PLUG")
 # 目で比較できる（どの部屋の CO2 が高いか、が一目で分かる）。
 # Redis のキーは "<測定項目>_<部屋>" 形式。
 ROOMS = (
-    ("Bedroom", "BEDROOM"),
-    ("Living Room", "LIVING"),
-    ("Study Room", "STUDY"),
-    ("1F", "1F"),
+    ("寝室", "BEDROOM"),
+    ("リビング", "LIVING"),
+    ("書斎", "STUDY"),
+    ("1 階", "1F"),
 )
 MEASURES = (
-    ("Temp", "TEMPERATURE"),
-    ("Humidity", "HUMIDITY"),
+    ("気温", "TEMPERATURE"),
+    ("湿度", "HUMIDITY"),
     ("CO₂", "CO2"),
-    ("Light", "LIGHT_LEVEL"),
+    ("明るさ", "LIGHT_LEVEL"),
 )
+
+JST = timezone(timedelta(hours=9))
+
+# 料金区分（app_measure が Redis の PRICE_SCHEDULE に書く短い名前）→ (表示名, 単価 [円/kWh])
+PRICE_BANDS = {
+    "night": ("夜間", PRICE_NIGHT_TIME),
+    "day": ("昼間", PRICE_DAY_TIME),
+    "life": ("生活時間帯", PRICE_LIFE_TIME),
+}
 
 
 @auth.verify_password
@@ -278,13 +293,14 @@ def sensor_meta(key):
     目盛り（バー）は「警報点までどれだけ余裕があるか」を示す装置なので、
     閾値を持つ POWER と CO2 にだけレンジを与える。それ以外は数値のみ。
     """
-    if key == "KEN_PLUG":          return ("Ken's plug", "W", None)
-    if key == "YACHI_PLUG":        return ("Yachi's plug", "W", None)
-    if "TEMPERATURE" in key:       return ("Temp", "°C", None)
-    if "HUMIDITY" in key:          return ("Humidity", "%", None)
+    if key == "KEN_PLUG":          return ("Ken のプラグ", "W", None)
+    if key == "YACHI_PLUG":        return ("Yachi のプラグ", "W", None)
+    if "TEMPERATURE" in key:       return ("気温", "°C", None)
+    if "HUMIDITY" in key:          return ("湿度", "%", None)
     if "CO2" in key:               return ("CO₂", "ppm", (400, CO2_ALERT_THRESHOLD_PPM))
-    if "LIGHT_LEVEL" in key:       return ("Light", "", None)
-    if key == "POWER":             return ("Power", "W", (0, POWER_SCALE_MAX_W))
+    # SwitchBot Hub 2 の照度は 1〜20 の 20 段階
+    if "LIGHT_LEVEL" in key:       return ("明るさ", "/20", None)
+    if key == "POWER":             return ("消費電力", "W", (0, POWER_SCALE_MAX_W))
     return (key, "", None)
 
 
@@ -358,25 +374,31 @@ def build_hero(entry):
         return {
             "text": reading["text"],
             "state": "",
-            "note": "The meter returned a value that could not be read.",
+            "note": "スマートメーターから読み取れない値が届きました。",
             "updated_at": reading["updated_at"],
             "pct": None,
         }
     state = reading["state"]
+    alarm_text = f"{POWER_ALERT_THRESHOLD_W:,}"
     if state == "alert":
-        note = f"Over the {POWER_ALERT_THRESHOLD_W:,} W alarm point."
+        # 超過していることは見出しの文で伝えているので、ここでは取るべき行動だけを書く
+        note = "使っていない家電を止めてください。"
     elif state == "warn":
-        note = f"Nearing the {POWER_ALERT_THRESHOLD_W:,} W alarm point."
+        note = f"警報点の {alarm_text} W に近づいています。"
     else:
-        note = f"Under the {POWER_ALERT_THRESHOLD_W:,} W alarm point."
+        note = ""
+    # 家族が知りたいのは「あとどれだけ使えるか」なので、警報点までの余裕を主役にする
+    headroom = POWER_ALERT_THRESHOLD_W - number
     return {
         "text": reading["text"],
+        "headroom_text": format_number(abs(headroom)),
+        "over": headroom < 0,
         "state": state,
         "note": note,
         "updated_at": reading["updated_at"],
         "pct": scale_percent(number, 0, POWER_SCALE_MAX_W) or 0,
         "alarm_pct": scale_percent(POWER_ALERT_THRESHOLD_W, 0, POWER_SCALE_MAX_W),
-        "alarm_text": f"{POWER_ALERT_THRESHOLD_W:,}",
+        "alarm_text": alarm_text,
         "step_pct": round(POWER_SCALE_STEP_W / POWER_SCALE_MAX_W * 100, 3),
         "max": f"{POWER_SCALE_MAX_W:,}",
     }
@@ -396,7 +418,9 @@ def build_matrix(data):
         cells = [build_reading(f"{prefix}_{suffix}", data.get(f"{prefix}_{suffix}"))
                  for _, suffix in columns]
         if any(cells):
-            rows.append({"label": label, "cells": cells})
+            # 狭い画面ではセルから単位を外して行見出しに寄せるので、行の単位も持たせる
+            unit = next(cell["unit"] for cell in cells if cell)
+            rows.append({"label": label, "unit": unit, "cells": cells})
     if not rows:
         return None
 
@@ -411,11 +435,76 @@ def build_matrix(data):
     return {"columns": [name for name, _ in columns], "rows": rows, "ages": ages}
 
 
+def build_tariff(entry, watts, now=None):
+    """今日の料金区分の表示モデル。
+
+    区分表は app_measure が Redis の PRICE_SCHEDULE に書く（祝日判定は app_measure 側にしかないため）。
+    今日 0 時からの 48 時間分が 1 時間刻みで入っている。無い・古い・壊れているときは None。
+    """
+    if not isinstance(entry, dict) or not isinstance(entry.get("value"), dict):
+        return None
+    now = now or datetime.now(JST)
+    schedule = entry["value"]
+    bands = schedule.get("bands")
+    if (schedule.get("date") != now.strftime("%Y-%m-%d")
+            or not isinstance(bands, list) or len(bands) < 24
+            or any(not isinstance(band, str) or band not in PRICE_BANDS for band in bands)):
+        return None
+
+    hour = now.hour
+    label, price = PRICE_BANDS[bands[hour]]
+    top_price = max(p for _, p in PRICE_BANDS.values())
+
+    hours = []
+    for h, band in enumerate(bands[:24]):
+        band_label, band_price = PRICE_BANDS[band]
+        hours.append({
+            "title": f"{h}時台 {band_label} {band_price:.2f} 円/kWh",
+            "pct": round(band_price / top_price * 100, 1),
+            "when": "now" if h == hour else ("past" if h < hour else "future"),
+        })
+
+    # 読み上げ用に、同じ区分が続く時間をまとめる（0〜6 時 夜間 …）
+    runs = []
+    for h, band in enumerate(bands[:24]):
+        if runs and runs[-1]["band"] == band:
+            runs[-1]["end"] = h + 1
+        else:
+            runs.append({"band": band, "start": h, "end": h + 1})
+    spans = [f"{r['start']}時から{r['end']}時 {PRICE_BANDS[r['band']][0]} "
+             f"{PRICE_BANDS[r['band']][1]:.2f} 円" for r in runs]
+
+    next_change = None
+    for h in range(hour + 1, len(bands)):
+        if bands[h] != bands[hour]:
+            next_label, next_price = PRICE_BANDS[bands[h]]
+            day = "明日の" if h >= 24 else ""
+            next_change = f"{day}{h % 24}時から{next_label}（{next_price:.2f} 円）"
+            break
+
+    per_hour = None
+    if watts is not None and watts >= 0:
+        per_hour = f"{watts / 1000 * price:,.0f}"
+
+    return {
+        "label": label,
+        "price": f"{price:.2f}",
+        "per_hour": per_hour,
+        "next_change": next_change,
+        "hours": hours,
+        "now_pct": round((hour + 0.5) / 24 * 100, 2),
+        "spans": spans,
+    }
+
+
 def build_view(data):
     """Redis のデータ全体からダッシュボードの表示モデルを組み立てる。"""
+    power = data.get("POWER")
+    watts = as_float(power.get("value")) if isinstance(power, dict) else None
     return {
-        "hero": build_hero(data.get("POWER")),
+        "hero": build_hero(power),
         "plugs": [r for r in (build_reading(k, data.get(k)) for k in PLUG_KEYS) if r],
+        "tariff": build_tariff(data.get("PRICE_SCHEDULE"), watts),
         "matrix": build_matrix(data),
     }
 
@@ -453,7 +542,7 @@ def get_data():
             'dashboard.html',
             client_ip=request.remote_addr,
             refresh_seconds=REFRESH_SECONDS,
-            power_threshold=POWER_ALERT_THRESHOLD_W,
+            power_threshold=f"{POWER_ALERT_THRESHOLD_W:,}",
             **build_view(data),
         )
     except Exception as e:

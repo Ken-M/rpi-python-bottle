@@ -346,6 +346,33 @@ def get_price_unit(check_date):
     return PRICE_LIFE_TIME, "life time", check_time
 
 
+# get_price_unit() の区分名 → ダッシュボードへ渡す短い名前
+_PRICE_BAND_NAMES = {"night time": "night", "day time": "day", "life time": "life"}
+_price_schedule_cache = None
+
+
+def get_price_schedule(now):
+    """今日 0 時から 48 時間分の料金区分を 1 時間ごとに返す（ダッシュボードの料金表示用）。
+
+    区分の境界はすべて正時なので 1 時間刻みで足りる。get_price_unit() は渡した時刻の
+    15 分前で判定するため、各時間の 45 分を渡してその時間の 30 分の区分を得る。
+    翌日分は「次に単価が変わる時刻」を日付をまたいで求めるために含める。
+    日付が変わるまでは結果を使い回す（祝日判定を毎回繰り返さないため）。
+    """
+    global _price_schedule_cache
+    date_str = now.strftime(_DATE_FORMAT)
+    if _price_schedule_cache is None or _price_schedule_cache["date"] != date_str:
+        midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        _price_schedule_cache = {
+            "date": date_str,
+            "bands": [
+                _PRICE_BAND_NAMES[get_price_unit(midnight + datetime.timedelta(hours=h, minutes=45))[1]]
+                for h in range(48)
+            ],
+        }
+    return _price_schedule_cache
+
+
 def get_hub_data():
     hub_data_body = {}
 
@@ -493,6 +520,15 @@ def parseE7(EDT):
         state.latest_instant_val = {}
     for key, value in data_body.items():
         state.latest_instant_val[key] = {"value": value, "updated_at": datetime_str + "+0900"}
+
+    # 料金の時間帯表はダッシュボード専用なので Redis にだけ置く（data_body に入れず GCP へは送らない）
+    try:
+        state.latest_instant_val["PRICE_SCHEDULE"] = {
+            "value": get_price_schedule(time_stamp),
+            "updated_at": datetime_str + "+0900",
+        }
+    except Exception as e:
+        logger.warning("get_price_schedule failed. {}".format(e))
 
     logger.debug("merged json: {}".format(json.dumps(state.latest_instant_val)))
     redis_client.set('my_key', json.dumps(state.latest_instant_val))
