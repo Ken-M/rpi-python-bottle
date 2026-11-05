@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1.28
-# python:3.15.1-slim (Debian ベース、arm64 対応) を使用。
+# python:3.15.2-slim (Debian ベース、arm64 対応) を使用。
 # 以前は debian:trixie 上で Python をソースビルドしていたが、
 # 公式 slim イメージで同一バージョンが提供されているため移行した（ビルド時間 30〜60 分 → 数分）。
-FROM python:3.15.1-slim
+FROM python:3.15.2-slim
 
 USER root
 
