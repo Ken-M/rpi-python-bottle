@@ -20,8 +20,10 @@ RUN --mount=type=secret,id=takumi_guard_token \
     pip3 install --upgrade pip setuptools wheel
 
 # Python パッケージをインストール
-# cryptography・grpcio はいずれも linux/arm64 の pre-built wheel が PyPI に存在するため
+# cryptography は linux/arm64 の pre-built wheel が PyPI に存在するため
 # Rust コンパイルは不要（Rustup インストール不要）
+# grpcio は入れない。コードは gRPC を使っておらず（google.api_core.retry は grpcio なしで動く）、
+# wheel に同梱の c-ares が古く脆弱性を抱えるため（grpcio 1.85.3 時点で c-ares 1.34.5）。
 # こちらも Takumi Guard 経由で取得する（secret マウントは RUN ごとに必要）。
 RUN --mount=type=secret,id=takumi_guard_token \
     TG_TOKEN="$(grep -vE '^[[:space:]]*#' /run/secrets/takumi_guard_token 2>/dev/null | grep -oE 'tg_[A-Za-z0-9_]+' | head -n1)"; \
@@ -39,7 +41,6 @@ RUN --mount=type=secret,id=takumi_guard_token \
         google-auth \
         pychromecast \
         six \
-        grpcio \
         cryptography \
         pip-review \
         redis && \
