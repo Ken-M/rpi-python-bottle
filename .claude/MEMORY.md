@@ -15,7 +15,8 @@
 
 - ベースイメージ: `debian:trixie`、Python **3.14.4 ソースビルド**
 - ビルド時間: 30〜60 分（キャッシュが効く場合を除く）
-- **Rust 不要**: `cryptography` / `grpcio` は linux/arm64 の pre-built wheel が存在するため `rustup` は不要
+- **Rust 不要**: `cryptography` は linux/arm64 の pre-built wheel が存在するため `rustup` は不要
+- **grpcio は入れない**: 未使用で、同梱の c-ares が古く脆弱（詳細は CLAUDE.md）
 - **クロスビルド時の注意**: `ca-certificates` を必ずインストールすること。ないと `wget` が python.org の TLS 証明書検証で失敗する
 
 ---

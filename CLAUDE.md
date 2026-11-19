@@ -151,8 +151,15 @@ docker compose up -d
 
 ### Rust は不要
 
-`cryptography` と `grpcio` はいずれも `linux/arm64` 向け pre-built wheel が PyPI に存在する。  
+`cryptography` は `linux/arm64` 向け pre-built wheel が PyPI に存在する。  
 `rustup` のインストールは不要。Dockerfile に Rust 関連の記述を追加しないこと。
+
+### grpcio は入れない
+
+`get-power.py` は gRPC を使っていない（`google.api_core.retry` は grpcio なしで動き、`grpc` も読み込まれない）。
+grpcio の wheel は c-ares を同梱しており、その版が古く脆弱性を抱えている（grpcio 1.85.3 時点で c-ares 1.34.5。
+修正版は 1.34.9）ため、2026-11 に Dockerfile から外した。gRPC を使う機能を足すときは、
+同梱 c-ares の版を確かめてから入れること。
 
 ### シークレットファイルの扱い
 
